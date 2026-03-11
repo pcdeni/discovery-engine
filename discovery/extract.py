@@ -183,13 +183,19 @@ def _extract_gemini(prompt: str, model: str, api_key: str) -> str:
 
 
 def _extract_openai(prompt: str, model: str, api_key: str) -> str:
-    """Extract using OpenAI-compatible API."""
+    """Extract using OpenAI-compatible API (also works with local LLMs via base_url)."""
     try:
         from openai import OpenAI
     except ImportError:
         raise ExtractionError("Install openai: pip install openai")
 
-    client = OpenAI(api_key=api_key)
+    # Support custom base URL for local LLMs (ollama, vllm, llama.cpp, etc.)
+    base_url = config.get_base_url()
+    kwargs = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+
+    client = OpenAI(**kwargs)
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],

@@ -108,6 +108,12 @@ def get_github_user() -> Optional[str]:
     return config.get("github_user") or os.environ.get("GITHUB_USER")
 
 
+def get_base_url() -> Optional[str]:
+    """Get custom API base URL (for local LLMs)."""
+    config = load_config()
+    return config.get("base_url") or os.environ.get("OPENAI_BASE_URL")
+
+
 def get_prompt_text() -> str:
     """Load the extraction prompt from disk."""
     if not PROMPT_FILE.exists():

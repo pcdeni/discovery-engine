@@ -57,10 +57,11 @@ def main():
 
     # ── config ──────────────────────────────────────────────────────
     config_parser = subparsers.add_parser("config", help="Configure API keys and preferences")
-    config_parser.add_argument("--provider", choices=["anthropic", "openrouter", "gemini", "openai"],
-                              help="LLM provider")
-    config_parser.add_argument("--api-key", help="API key for the provider")
+    config_parser.add_argument("--provider", choices=["anthropic", "openrouter", "gemini", "openai", "local"],
+                              help="LLM provider ('local' for ollama/vllm/llama.cpp)")
+    config_parser.add_argument("--api-key", help="API key for the provider (use 'none' for local)")
     config_parser.add_argument("--model", help="Model name (provider-specific)")
+    config_parser.add_argument("--base-url", help="Custom API base URL (for local LLMs, e.g. http://localhost:11434/v1)")
     config_parser.add_argument("--github-user", help="Your GitHub username")
     config_parser.add_argument("--batch-size", type=int, help="Papers per submission batch")
     config_parser.add_argument("--show", action="store_true", help="Show current config")
@@ -175,12 +176,26 @@ def cmd_config(args):
     cfg = config.load_config()
 
     if args.provider:
-        cfg["provider"] = args.provider
+        # 'local' is sugar for 'openai' with a local base URL
+        if args.provider == "local":
+            cfg["provider"] = "openai"
+            if not args.base_url:
+                cfg["base_url"] = "http://localhost:11434/v1"  # ollama default
+            if not args.api_key:
+                cfg["openai_api_key"] = "not-needed"
+            if not args.model:
+                cfg["model"] = "llama3.1"  # sensible default
+        else:
+            cfg["provider"] = args.provider
     if args.api_key:
         provider = args.provider or cfg.get("provider", "anthropic")
+        if provider == "local":
+            provider = "openai"
         cfg[f"{provider}_api_key"] = args.api_key
     if args.model:
         cfg["model"] = args.model
+    if args.base_url:
+        cfg["base_url"] = args.base_url
     if args.github_user:
         cfg["github_user"] = args.github_user
     if args.batch_size:
@@ -193,9 +208,12 @@ def cmd_config(args):
     provider = cfg.get("provider", "anthropic")
     key = cfg.get(f"{provider}_api_key", "")
     key_display = (key[:8] + "...") if key else "NOT SET"
+    base_url = cfg.get("base_url", "")
     print(f"  Provider: {provider}")
     print(f"  API key: {key_display}")
     print(f"  Model: {cfg.get('model', config.get_model())}")
+    if base_url:
+        print(f"  Base URL: {base_url}")
     print(f"  GitHub user: {cfg.get('github_user', 'NOT SET')}")
 
 
