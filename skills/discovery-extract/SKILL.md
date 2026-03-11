@@ -58,12 +58,18 @@ discovery run --source openalex --count 50
 discovery run --source osti --count 50
 ```
 
-### With cheaper models (via OpenRouter)
+### With other models
 ```bash
+# OpenRouter (DeepSeek, Llama, Qwen, etc.)
 pip install -e ".[all]"
 discovery config --provider openrouter --api-key $OPENROUTER_API_KEY
 discovery config --model deepseek/deepseek-chat
-discovery run --auto-submit    # ~$0.002/paper instead of ~$0.02/paper
+discovery run --auto-submit
+
+# Local LLM (no API key needed)
+discovery config --provider local
+discovery config --model llama3.1
+discovery run --auto-submit
 ```
 
 ## Submitting Results
@@ -95,13 +101,12 @@ The system is fully decentralized:
 Papers connect when one's `provides` matches another's `requires`, enabling
 cross-domain scientific discovery at scale.
 
-## Cost
+## Supported Models
 
-| Provider | Model | Cost/Paper |
-|----------|-------|-----------|
-| Anthropic | Claude Sonnet 4 | ~$0.02 |
-| Google | Gemini 2.5 Flash | ~$0.003 |
-| OpenRouter | DeepSeek V3 | ~$0.002 |
-| OpenAI | GPT-4o | ~$0.02 |
-
-Running 100 papers overnight costs $0.20-2.00 depending on model.
+| Provider | Model | Quality |
+|----------|-------|---------|
+| Anthropic | Claude Sonnet 4 | Excellent |
+| Google | Gemini 2.5 Flash | Good |
+| OpenRouter | DeepSeek V3 | Good |
+| OpenAI | GPT-4o | Good |
+| Local | Any 70B+ via ollama/vllm | Varies |

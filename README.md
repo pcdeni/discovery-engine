@@ -38,7 +38,7 @@ discover papers → fetch text → LLM extraction → validate → save → subm
       └── processed_papers.jsonl ←── auto-updates on merge ←─────────────────────────────────────┘
 ```
 
-1. **You run the loop** on your machine with your own LLM (cloud API or local, ~$0.002-0.03/paper)
+1. **You run the loop** on your machine with your own LLM (cloud API or local)
 2. **Papers discovered** in real-time from public APIs (no pre-built queue needed)
 3. **Duplicates avoided** via shared `processed_papers.jsonl` on GitHub
 4. **Results validate** locally against the schema
@@ -63,13 +63,13 @@ discover papers → fetch text → LLM extraction → validate → save → subm
 
 ## Supported LLM Providers
 
-| Provider | Models | Cost/paper |
-|----------|--------|-----------|
-| Anthropic | Claude Sonnet 4 | ~$0.02 |
-| Google | Gemini 2.5 Flash | ~$0.003 |
-| OpenRouter | DeepSeek V3, Llama 3.3 70B, Qwen3 235B | ~$0.002-0.004 |
-| OpenAI | GPT-4o | ~$0.02 |
-| Local (ollama, vllm, llama.cpp) | Any GGUF/safetensors model | Free |
+| Provider | Models |
+|----------|--------|
+| Anthropic | Claude Sonnet 4 |
+| Google | Gemini 2.5 Flash |
+| OpenRouter | DeepSeek V3, Llama 3.3 70B, Qwen3 235B |
+| OpenAI | GPT-4o |
+| Local (ollama, vllm, llama.cpp) | Any GGUF/safetensors model |
 
 ### Local LLMs
 
@@ -119,8 +119,7 @@ See [DESIGN.md](DESIGN.md) for the complete system design, including:
 - Two-layer extraction (facts + cross-domain abstraction)
 - Paper discovery and tracking
 - Quality assurance (schema validation, honeypots, consensus)
-- Why not blockchain (and what we use instead)
-- Scaling roadmap
+- Model compatibility and contributor workflow
 
 ## OpenClaw Skill
 

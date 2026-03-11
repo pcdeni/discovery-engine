@@ -59,17 +59,22 @@ discovery run --count 100 --auto-submit   # stop after 100 papers
 7. Saves to your local batch (~/.discovery/data/batch/)
 8. Auto-submits PR when batch is full (if `--auto-submit` is set)
 
-### Using cheaper models
+### Using other models
 
 ```bash
-# OpenRouter: DeepSeek V3 at $0.002/paper
+# OpenRouter (DeepSeek V3, Llama 3.3, Qwen3, etc.)
 pip install -e ".[all]"
 discovery config --provider openrouter --api-key YOUR_KEY
 discovery config --model deepseek/deepseek-chat
 discovery run --auto-submit
 
-# Google: Gemini Flash at $0.003/paper
+# Google Gemini
 discovery config --provider gemini --api-key YOUR_KEY
+discovery run --auto-submit
+
+# Local LLM (ollama, vllm, llama.cpp)
+discovery config --provider local
+discovery config --model llama3.1
 discovery run --auto-submit
 ```
 
@@ -121,7 +126,7 @@ The system uses `processed_papers.jsonl` in the repo root as a shared tracking f
 
 ## Tips
 
-- **Cheaper models work fine.** Gemini Flash and DeepSeek V3 produce valid schema at 1/10th the cost of Sonnet.
+- **Lightweight models work fine.** Gemini Flash and DeepSeek V3 produce valid schema consistently.
 - **Full text > abstract.** Papers with full text produce richer extractions. PMC OA and arXiv have free full text.
 - **Run overnight.** Set `discovery run --count 100 --auto-submit` before bed. It'll process and submit automatically.
 - **Check validation failures.** If a paper fails validation, it's usually a model issue (bad JSON structure). The normalizer fixes most common issues automatically.
