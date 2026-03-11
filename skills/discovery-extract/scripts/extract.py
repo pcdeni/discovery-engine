@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
 """
-Discovery Engine — Self-contained paper extraction script.
+Discovery Engine — Paper discovery, validation, and saving utility.
 
-No pip install needed. Uses only Python stdlib (urllib, json, xml).
-Discovers papers, fetches text, calls LLM APIs, validates, saves results.
+The agent running this skill IS the extractor. This script handles
+the non-LLM parts: discovering papers, deduplication, normalization,
+validation, and saving results.
 
 Usage:
-    python extract.py --provider anthropic --api-key sk-ant-... --count 5
-    python extract.py --provider openrouter --api-key sk-or-... --source arxiv --count 10
-    python extract.py --provider local --base-url http://localhost:11434/v1 --count 3
-    python extract.py validate results/paper.json
+    python extract.py discover --count 10                    # find papers
+    python extract.py discover --source arxiv --count 5      # from specific source
+    python extract.py save result.json --paper-id arxiv:2401.00001 --source arxiv
+    python extract.py validate results/                      # check saved results
 """
 
 import argparse
 import json
-import os
 import re
 import ssl
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -29,17 +28,7 @@ from pathlib import Path
 # ── Configuration ────────────────────────────────────────────────────
 
 TRACKING_URL = "https://raw.githubusercontent.com/pcdeni/discovery-engine/master/processed_papers.jsonl"
-SCRIPT_DIR = Path(__file__).parent
-PROMPT_FILE = SCRIPT_DIR.parent / "references" / "prompt.txt"
 OUTPUT_DIR = Path.home() / ".discovery" / "data" / "batch"
-
-DEFAULT_MODELS = {
-    "anthropic": "claude-sonnet-4-20250514",
-    "openrouter": "deepseek/deepseek-chat",
-    "openai": "gpt-4o",
-    "gemini": "gemini-2.5-flash",
-    "local": "llama3.1",
-}
 
 # SSL context that works on most systems
 try:
@@ -53,21 +42,6 @@ except Exception:
 def http_get(url, headers=None, timeout=30):
     """GET request using urllib. Returns (status, body_text)."""
     req = urllib.request.Request(url, headers=headers or {})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as resp:
-            return resp.status, resp.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", errors="replace")
-    except Exception as e:
-        return 0, str(e)
-
-
-def http_post(url, data, headers=None, timeout=300):
-    """POST JSON request using urllib. Returns (status, body_text)."""
-    body = json.dumps(data).encode("utf-8")
-    hdrs = {"Content-Type": "application/json"}
-    hdrs.update(headers or {})
-    req = urllib.request.Request(url, data=body, headers=hdrs, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as resp:
             return resp.status, resp.read().decode("utf-8", errors="replace")
@@ -143,7 +117,6 @@ def discover_pmc(count=10, lookback_days=30):
         for pmc_id in ids[:count]:
             info = results.get(str(pmc_id), {})
             title = info.get("title", "")
-            # Get abstract via EFetch
             abstract = _fetch_pmc_abstract(pmc_id, info)
             if title:
                 papers.append({
@@ -159,7 +132,6 @@ def discover_pmc(count=10, lookback_days=30):
 
 def _fetch_pmc_abstract(pmc_id, info=None):
     """Fetch abstract for a PMC paper via multiple fallback methods."""
-    # Try to get PMID from article IDs
     pmid = ""
     if info:
         for aid in info.get("articleids", []):
@@ -167,7 +139,6 @@ def _fetch_pmc_abstract(pmc_id, info=None):
                 pmid = aid.get("value", "")
                 break
 
-    # Try PubMed EFetch with PMID (returns cleaner XML)
     if pmid:
         url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&rettype=abstract&retmode=xml"
         status, body = http_get(url)
@@ -187,7 +158,6 @@ def _fetch_pmc_abstract(pmc_id, info=None):
             except ET.ParseError:
                 pass
 
-    # Fallback: PMC EFetch
     url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pmc&id={pmc_id}&rettype=abstract&retmode=xml"
     status, body = http_get(url)
     if status == 200 and "<abstract" in body.lower():
@@ -196,7 +166,6 @@ def _fetch_pmc_abstract(pmc_id, info=None):
             for ab in root.iter():
                 if ab.tag.endswith("abstract") or ab.tag == "abstract":
                     text = "".join(ab.itertext()).strip()
-                    # Strip XML tag remnants
                     text = re.sub(r"<[^>]+>", "", text)
                     if len(text) > 100:
                         return text
@@ -223,7 +192,6 @@ def discover_openalex(count=10, lookback_days=30):
         for work in data.get("results", [])[:count]:
             oa_id = work.get("id", "").split("/")[-1]
             title = work.get("title", "")
-            # OpenAlex stores abstract as inverted index
             abstract = _reconstruct_abstract(work.get("abstract_inverted_index"))
             if title and oa_id:
                 papers.append({
@@ -296,7 +264,6 @@ def discover_papers(source=None, count=10, lookback_days=30):
             return []
         return fn(count=count, lookback_days=lookback_days)
 
-    # Round-robin across all sources
     per_source = max(count // len(discoverers), 3)
     papers = []
     for name, fn in discoverers.items():
@@ -307,7 +274,7 @@ def discover_papers(source=None, count=10, lookback_days=30):
             print(f"    Found {len(found)} papers", file=sys.stderr)
         except Exception as e:
             print(f"    [warn] {name} failed: {e}", file=sys.stderr)
-        time.sleep(1)  # Be polite to APIs
+        time.sleep(1)
     return papers
 
 
@@ -333,140 +300,12 @@ def fetch_processed_ids():
     return ids
 
 
-# ── LLM API Calls ───────────────────────────────────────────────────
-
-def call_anthropic(prompt, model, api_key):
-    """Call Anthropic Claude API."""
-    status, body = http_post(
-        "https://api.anthropic.com/v1/messages",
-        data={
-            "model": model,
-            "max_tokens": 16384,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-    )
-    if status != 200:
-        raise RuntimeError(f"Anthropic API error {status}: {body[:200]}")
-    data = json.loads(body)
-    return data["content"][0]["text"]
-
-
-def call_openai_compatible(prompt, model, api_key, base_url="https://api.openai.com/v1"):
-    """Call OpenAI-compatible API (also works for OpenRouter, local LLMs)."""
-    status, body = http_post(
-        f"{base_url.rstrip('/')}/chat/completions",
-        data={
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 16384,
-            "temperature": 0.1,
-        },
-        headers={"Authorization": f"Bearer {api_key}"},
-    )
-    if status != 200:
-        raise RuntimeError(f"API error {status}: {body[:200]}")
-    data = json.loads(body)
-    if "error" in data:
-        raise RuntimeError(f"API error: {data['error']}")
-    return data["choices"][0]["message"]["content"]
-
-
-def call_gemini(prompt, model, api_key):
-    """Call Google Gemini API."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    status, body = http_post(
-        url,
-        data={
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": 16384, "temperature": 0.1},
-        },
-    )
-    if status != 200:
-        raise RuntimeError(f"Gemini API error {status}: {body[:200]}")
-    data = json.loads(body)
-    return data["candidates"][0]["content"]["parts"][0]["text"]
-
-
-def call_llm(prompt, provider, api_key, model, base_url=None):
-    """Dispatch to the right LLM provider."""
-    if provider == "anthropic":
-        return call_anthropic(prompt, model, api_key)
-    elif provider == "openrouter":
-        return call_openai_compatible(prompt, model, api_key, "https://openrouter.ai/api/v1")
-    elif provider == "openai":
-        url = base_url or "https://api.openai.com/v1"
-        return call_openai_compatible(prompt, model, api_key, url)
-    elif provider == "gemini":
-        return call_gemini(prompt, model, api_key)
-    elif provider == "local":
-        url = base_url or "http://localhost:11434/v1"
-        return call_openai_compatible(prompt, model, api_key or "not-needed", url)
-    else:
-        raise ValueError(f"Unknown provider: {provider}")
-
-
-# ── JSON Parsing ─────────────────────────────────────────────────────
-
-def parse_json_response(text):
-    """Extract JSON from LLM response, handling markdown blocks and commentary."""
-    text = text.strip()
-
-    # Try direct parse
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    # Try markdown code block
-    m = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1).strip())
-        except json.JSONDecodeError:
-            pass
-
-    # Try finding outermost { ... }
-    first = text.find("{")
-    if first >= 0:
-        depth, in_str, esc = 0, False, False
-        for i in range(first, len(text)):
-            c = text[i]
-            if esc:
-                esc = False
-                continue
-            if c == "\\":
-                esc = True
-                continue
-            if c == '"' and not esc:
-                in_str = not in_str
-                continue
-            if in_str:
-                continue
-            if c == "{":
-                depth += 1
-            elif c == "}":
-                depth -= 1
-                if depth == 0:
-                    try:
-                        return json.loads(text[first:i + 1])
-                    except json.JSONDecodeError:
-                        break
-
-    raise ValueError("Could not extract valid JSON from LLM response")
-
-
 # ── Normalization ────────────────────────────────────────────────────
 
 def _to_snake_case(text):
     """Convert human-readable text to snake_case operation name."""
-    # Already valid snake_case? Return as-is
     if re.match(r"^[a-z][a-z0-9_]*$", text):
         return text[:80]
-    # Remove special chars except underscores and spaces
     cleaned = re.sub(r"[^a-zA-Z0-9\s_]", "", text)
     words = re.split(r"[\s_]+", cleaned.strip())
     result = "_".join(w.lower() for w in words if w)
@@ -507,6 +346,8 @@ def normalize_result(data):
     - String mechanism -> dict
     - Human-readable operation names -> snake_case
     """
+    if not isinstance(data, dict):
+        return data
     data = json.loads(json.dumps(data))  # deep copy
 
     # Fix 1: 'analysis' -> 'paper_analysis'
@@ -595,7 +436,6 @@ def validate_result(data):
     """Validate extraction result. Returns list of issues (empty = valid)."""
     issues = []
 
-    # Top-level keys
     if "paper_analysis" not in data:
         if "analysis" in data:
             issues.append("Wrong key: 'analysis' should be 'paper_analysis'")
@@ -622,7 +462,6 @@ def validate_result(data):
                 issues.append("Missing or empty: interface.provides")
             if not cd["interface"].get("requires"):
                 issues.append("Missing or empty: interface.requires")
-            # Check provides/requires are dicts not strings
             for p in cd["interface"].get("provides", []):
                 if isinstance(p, str):
                     issues.append("provides entries must be objects, not strings")
@@ -634,7 +473,6 @@ def validate_result(data):
         else:
             issues.append("cross_domain.interface must be an object")
 
-        # Check tensions are dicts not strings
         for t in cd.get("unsolved_tensions", []):
             if isinstance(t, str):
                 issues.append("unsolved_tensions entries must be objects, not strings")
@@ -643,135 +481,84 @@ def validate_result(data):
     return issues
 
 
-# ── Main Extraction Loop ────────────────────────────────────────────
+# ── CLI Commands ─────────────────────────────────────────────────────
 
-def extract_one(paper, prompt_text, provider, api_key, model, base_url=None):
-    """Extract structured data from a single paper. Returns (result_dict, issues)."""
-    text = paper.get("abstract", "")
-    if len(text.strip()) < 50:
-        return None, ["Paper text too short (< 50 chars)"]
+def run_discover(args):
+    """Discover papers and output as JSON."""
+    count = args.count or 10
+    print("Discovering papers...", file=sys.stderr)
+    papers = discover_papers(source=args.source, count=count * 2)
 
-    full_prompt = prompt_text + "\n\n---\n\n# PAPER TEXT\n\n" + text
+    print("Checking for already-processed papers...", file=sys.stderr)
+    processed = fetch_processed_ids()
 
-    t0 = time.time()
-    raw = call_llm(full_prompt, provider, api_key, model, base_url)
-    elapsed = time.time() - t0
+    # Also check local output directory
+    output_dir = Path(args.output) if args.output else OUTPUT_DIR
+    if output_dir.exists():
+        for f in output_dir.glob("*.json"):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                pid = d.get("_meta", {}).get("paper_id", "")
+                if pid:
+                    processed.add(pid)
+            except Exception:
+                pass
 
-    result = parse_json_response(raw)
-    result = normalize_result(result)  # auto-fix common LLM format issues
-    issues = validate_result(result)
+    new_papers = [p for p in papers if p["id"] not in processed][:count]
 
-    # Add metadata
-    result["_meta"] = result.get("_meta", {})
-    result["_meta"]["paper_id"] = paper["id"]
-    result["_meta"]["source"] = paper["source"]
-    result["_meta"]["title"] = paper.get("title", "")
-    result["_meta"]["text_source"] = "abstract"
-    result["_meta"]["model"] = model
-    result["_meta"]["provider"] = provider
-    result["_meta"]["prompt_version"] = "v_combined"
-    result["_meta"]["extraction_seconds"] = round(elapsed, 1)
-    result["_meta"]["extracted_at"] = datetime.now(timezone.utc).isoformat()
+    print(f"Found {len(papers)} papers, {len(new_papers)} new after dedup", file=sys.stderr)
 
-    return result, issues
+    # Output as JSON to stdout (agent reads this)
+    print(json.dumps(new_papers, indent=2, ensure_ascii=False))
 
 
-def run_batch(args):
-    """Discover papers and extract them."""
-    # Load prompt
-    if not PROMPT_FILE.exists():
-        print(f"Error: Prompt file not found at {PROMPT_FILE}", file=sys.stderr)
-        sys.exit(1)
-    prompt_text = PROMPT_FILE.read_text(encoding="utf-8")
-
-    # Resolve provider settings
-    provider = args.provider
-    api_key = args.api_key or os.environ.get({
-        "anthropic": "ANTHROPIC_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "gemini": "GOOGLE_API_KEY",
-        "local": "",
-    }.get(provider, ""), "")
-    model = args.model or DEFAULT_MODELS.get(provider, "")
-    base_url = args.base_url
-
-    if not api_key and provider not in ("local",):
-        print(f"Error: No API key. Use --api-key or set env var.", file=sys.stderr)
+def run_save(args):
+    """Normalize, validate, and save a result file."""
+    result_path = Path(args.result_file)
+    if not result_path.exists():
+        print(f"Error: {result_path} not found", file=sys.stderr)
         sys.exit(1)
 
-    # Create output directory
+    try:
+        data = json.loads(result_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Normalize
+    data = normalize_result(data)
+
+    # Add/update metadata
+    data["_meta"] = data.get("_meta", {})
+    if args.paper_id:
+        data["_meta"]["paper_id"] = args.paper_id
+    if args.source:
+        data["_meta"]["source"] = args.source
+    if args.title:
+        data["_meta"]["title"] = args.title
+    data["_meta"]["text_source"] = "abstract"
+    data["_meta"]["prompt_version"] = "v_combined"
+    data["_meta"]["extracted_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Validate
+    issues = validate_result(data)
+    if issues:
+        print(f"Validation issues ({len(issues)}):", file=sys.stderr)
+        for issue in issues:
+            print(f"  - {issue}", file=sys.stderr)
+        print("Saving anyway (issues may be minor).", file=sys.stderr)
+
+    # Save
     output_dir = Path(args.output) if args.output else OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Discover papers
-    count = args.count or 5
-    print(f"Discovering {count} papers...", file=sys.stderr)
-    papers = discover_papers(source=args.source, count=count * 3)
+    paper_id = data.get("_meta", {}).get("paper_id", "unknown")
+    safe_id = paper_id.replace(":", "__").replace("/", "_")
+    outfile = output_dir / f"{safe_id}.json"
+    outfile.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    if not papers:
-        print("No papers found.", file=sys.stderr)
-        return
-
-    # Dedup against tracking file
-    print("Checking for already-processed papers...", file=sys.stderr)
-    processed = fetch_processed_ids()
-    # Also check local output directory
-    for f in output_dir.glob("*.json"):
-        try:
-            d = json.loads(f.read_text(encoding="utf-8"))
-            pid = d.get("_meta", {}).get("paper_id", "")
-            if pid:
-                processed.add(pid)
-        except Exception:
-            pass
-
-    papers = [p for p in papers if p["id"] not in processed]
-    print(f"  {len(papers)} new papers after dedup", file=sys.stderr)
-
-    if not papers:
-        print("All discovered papers already processed.", file=sys.stderr)
-        return
-
-    # Extract
-    done = 0
-    for paper in papers[:count]:
-        print(f"\n[{done + 1}/{count}] {paper['id']}: {paper['title'][:60]}...", file=sys.stderr)
-
-        if len(paper.get("abstract", "").strip()) < 50:
-            print("  Skipping: abstract too short", file=sys.stderr)
-            continue
-
-        # Retry loop
-        for attempt in range(1, 4):
-            try:
-                result, issues = extract_one(paper, prompt_text, provider, api_key, model, base_url)
-                if not issues:
-                    break
-                print(f"  Validation issues (attempt {attempt}): {issues[0]}", file=sys.stderr)
-                if attempt < 3:
-                    time.sleep(2)
-            except Exception as e:
-                print(f"  Error (attempt {attempt}): {e}", file=sys.stderr)
-                result, issues = None, [str(e)]
-                if "429" in str(e) or "rate" in str(e).lower():
-                    time.sleep(30 * attempt)
-                elif attempt < 3:
-                    time.sleep(3 * attempt)
-
-        if result and not issues:
-            # Save
-            safe_id = paper["id"].replace(":", "__").replace("/", "_")
-            outfile = output_dir / f"{safe_id}.json"
-            outfile.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
-            print(f"  Saved: {outfile.name} ({result['_meta'].get('extraction_seconds', '?')}s)", file=sys.stderr)
-            done += 1
-        else:
-            print(f"  FAILED: {issues[0] if issues else 'unknown'}", file=sys.stderr)
-
-        time.sleep(5)  # Rate limit courtesy
-
-    print(f"\nDone: {done}/{count} papers extracted to {output_dir}", file=sys.stderr)
+    status = "PASS" if not issues else f"WARN ({len(issues)} issues)"
+    print(f"{status}: saved {outfile}")
 
 
 def run_validate(args):
@@ -784,6 +571,7 @@ def run_validate(args):
         total += 1
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
+            data = normalize_result(data)  # normalize before validating
             issues = validate_result(data)
             if issues:
                 invalid += 1
@@ -799,50 +587,35 @@ def run_validate(args):
     sys.exit(0 if invalid == 0 else 1)
 
 
-def run_discover(args):
-    """Discover papers without extracting (dry run)."""
-    count = args.count or 10
-    papers = discover_papers(source=args.source, count=count)
-    processed = fetch_processed_ids()
-
-    new_papers = [p for p in papers if p["id"] not in processed]
-    print(f"Found {len(papers)} papers ({len(new_papers)} new):\n")
-    for p in new_papers[:count]:
-        has_text = "yes" if len(p.get("abstract", "")) > 100 else "no"
-        print(f"  {p['id']}: {p['title'][:70]}... [abstract: {has_text}]")
-
-
 # ── CLI ──────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Discovery Engine — self-contained paper extraction",
+        description="Discovery Engine — paper discovery, validation, and saving",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Examples:\n"
-               "  python extract.py --provider anthropic --api-key sk-ant-... --count 5\n"
-               "  python extract.py --provider local --count 3\n"
-               "  python extract.py discover --source arxiv --count 20\n"
-               "  python extract.py validate ./results/\n",
+               "  python extract.py discover --count 10\n"
+               "  python extract.py discover --source arxiv --count 5\n"
+               "  python extract.py save result.json --paper-id arxiv:2401.00001 --source arxiv\n"
+               "  python extract.py validate ~/.discovery/data/batch/\n",
     )
-    sub = parser.add_subparsers(dest="command")
+    sub = parser.add_subparsers(dest="command", required=True)
 
-    # Default: batch extraction
-    parser.add_argument("--provider", default="anthropic",
-                        choices=["anthropic", "openrouter", "openai", "gemini", "local"],
-                        help="LLM provider")
-    parser.add_argument("--api-key", help="API key (or use env var)")
-    parser.add_argument("--model", help="Model name (provider-specific)")
-    parser.add_argument("--base-url", help="Custom API base URL (for local LLMs)")
-    parser.add_argument("--source", help="Paper source (arxiv, pmc, openalex, osti)")
-    parser.add_argument("--count", type=int, default=5, help="Number of papers (default: 5)")
-    parser.add_argument("--output", help="Output directory (default: ~/.discovery/data/batch/)")
+    # discover
+    disc = sub.add_parser("discover", help="Find new papers (outputs JSON to stdout)")
+    disc.add_argument("--source", help="Paper source (arxiv, pmc, openalex, osti)")
+    disc.add_argument("--count", type=int, default=10, help="Number of papers (default: 10)")
+    disc.add_argument("--output", help="Output dir to check for local dedup")
 
-    # discover subcommand
-    disc = sub.add_parser("discover", help="Preview papers without extracting")
-    disc.add_argument("--source", help="Paper source")
-    disc.add_argument("--count", type=int, default=10)
+    # save
+    save = sub.add_parser("save", help="Normalize, validate, and save a result file")
+    save.add_argument("result_file", help="Path to the JSON extraction result")
+    save.add_argument("--paper-id", help="Paper ID (e.g., arxiv:2401.00001)")
+    save.add_argument("--source", help="Paper source (arxiv, pmc, openalex, osti)")
+    save.add_argument("--title", help="Paper title")
+    save.add_argument("--output", help="Output directory (default: ~/.discovery/data/batch/)")
 
-    # validate subcommand
+    # validate
     val = sub.add_parser("validate", help="Validate result files")
     val.add_argument("path", help="JSON file or directory")
 
@@ -850,10 +623,10 @@ def main():
 
     if args.command == "discover":
         run_discover(args)
+    elif args.command == "save":
+        run_save(args)
     elif args.command == "validate":
         run_validate(args)
-    else:
-        run_batch(args)
 
 
 if __name__ == "__main__":
