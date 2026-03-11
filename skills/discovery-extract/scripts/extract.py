@@ -459,6 +459,136 @@ def parse_json_response(text):
     raise ValueError("Could not extract valid JSON from LLM response")
 
 
+# ── Normalization ────────────────────────────────────────────────────
+
+def _to_snake_case(text):
+    """Convert human-readable text to snake_case operation name."""
+    # Already valid snake_case? Return as-is
+    if re.match(r"^[a-z][a-z0-9_]*$", text):
+        return text[:80]
+    # Remove special chars except underscores and spaces
+    cleaned = re.sub(r"[^a-zA-Z0-9\s_]", "", text)
+    words = re.split(r"[\s_]+", cleaned.strip())
+    result = "_".join(w.lower() for w in words if w)
+    return result[:80].rsplit("_", 1)[0] if len(result) > 80 else result
+
+
+def _infer_constraint_class(text):
+    """Infer constraint_class from tension text using simple heuristics."""
+    text = text.lower()
+    patterns = [
+        (r"speed.*accuracy|accuracy.*speed|fast.*precise", "speed_vs_accuracy"),
+        (r"throughput.*selectiv|selectiv.*throughput", "throughput_vs_selectivity"),
+        (r"cost.*quality|quality.*cost|expensive", "cost_vs_quality"),
+        (r"scalab|scale", "scalability"),
+        (r"generali[sz]|specific.*general|general.*specific", "generality_vs_specificity"),
+        (r"sensitiv.*specific|specific.*sensitiv", "sensitivity_vs_specificity"),
+        (r"resolut|precision.*recall|recall.*precision", "resolution_tradeoff"),
+        (r"energy.*efficien|power.*consum", "energy_efficiency"),
+        (r"stabil.*reactiv|reactiv.*stabil", "stability_vs_reactivity"),
+        (r"robustness|robust.*fragil", "robustness"),
+        (r"reproduc|replicab", "reproducibility"),
+    ]
+    for pattern, cls in patterns:
+        if re.search(pattern, text):
+            return cls
+    return "general_tradeoff"
+
+
+def normalize_result(data):
+    """
+    Auto-fix common LLM output issues before validation.
+
+    Handles:
+    - 'analysis' -> 'paper_analysis' key rename
+    - String tensions -> structured dicts
+    - String provides/requires -> structured dicts
+    - String interface -> dict with provides/requires lists
+    - String mechanism -> dict
+    - Human-readable operation names -> snake_case
+    """
+    data = json.loads(json.dumps(data))  # deep copy
+
+    # Fix 1: 'analysis' -> 'paper_analysis'
+    if "analysis" in data and "paper_analysis" not in data:
+        data["paper_analysis"] = data.pop("analysis")
+
+    # Fix 2: Ensure cross_domain exists
+    pa = data.get("paper_analysis", {})
+    if "cross_domain" not in data:
+        cd_fields = ["core_friction", "mechanism", "unsolved_tensions",
+                     "bridge_tags", "interface", "mechanism_components"]
+        if any(f in pa for f in cd_fields):
+            data["cross_domain"] = {}
+            for f in cd_fields:
+                if f in pa:
+                    data["cross_domain"][f] = pa.pop(f)
+
+    cd = data.get("cross_domain", {})
+
+    # Fix 3: String tensions -> structured dicts
+    tensions = cd.get("unsolved_tensions", [])
+    if isinstance(tensions, list):
+        fixed = []
+        for t in tensions:
+            if isinstance(t, str):
+                fixed.append({
+                    "tension": t,
+                    "constraint_class": _infer_constraint_class(t),
+                    "why_it_matters": "unspecified",
+                    "source_quote": "",
+                })
+            elif isinstance(t, dict):
+                if "tension" not in t and "description" in t:
+                    t["tension"] = t.pop("description")
+                if "constraint_class" not in t:
+                    t["constraint_class"] = _infer_constraint_class(t.get("tension", ""))
+                fixed.append(t)
+            else:
+                fixed.append(t)
+        cd["unsolved_tensions"] = fixed
+
+    # Fix 4: String interface -> structured dict
+    iface = cd.get("interface", {})
+    if isinstance(iface, str):
+        cd["interface"] = {"provides": [], "requires": []}
+        iface = cd["interface"]
+
+    if isinstance(iface, dict):
+        for direction in ("provides", "requires"):
+            ops = iface.get(direction, [])
+            if isinstance(ops, list):
+                fixed_ops = []
+                for op in ops:
+                    if isinstance(op, str):
+                        fixed_ops.append({
+                            "operation": _to_snake_case(op),
+                            "description": op,
+                        })
+                    elif isinstance(op, dict):
+                        operation = op.get("operation", "")
+                        if operation and not re.match(r"^[a-z][a-z0-9_]*$", operation):
+                            op["operation"] = _to_snake_case(operation)
+                        if not op.get("operation") and op.get("description"):
+                            op["operation"] = _to_snake_case(op["description"][:60])
+                        fixed_ops.append(op)
+                    else:
+                        fixed_ops.append(op)
+                iface[direction] = fixed_ops
+
+    # Fix 5: String mechanism -> dict
+    mech = cd.get("mechanism")
+    if isinstance(mech, str):
+        cd["mechanism"] = {"description": mech, "structural_pattern": ""}
+
+    # Fix 6: Ensure _meta exists
+    if "_meta" not in data:
+        data["_meta"] = {}
+
+    data["cross_domain"] = cd
+    return data
+
+
 # ── Validation ───────────────────────────────────────────────────────
 
 def validate_result(data):
@@ -528,6 +658,7 @@ def extract_one(paper, prompt_text, provider, api_key, model, base_url=None):
     elapsed = time.time() - t0
 
     result = parse_json_response(raw)
+    result = normalize_result(result)  # auto-fix common LLM format issues
     issues = validate_result(result)
 
     # Add metadata

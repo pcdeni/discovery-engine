@@ -21,8 +21,11 @@ from typing import Any
 
 def to_snake_case(text: str) -> str:
     """Convert human-readable text to snake_case operation name."""
-    # Remove special characters, keep alphanumeric and spaces
-    cleaned = re.sub(r"[^a-zA-Z0-9\s]", "", text)
+    # Already valid snake_case? Return as-is
+    if re.match(r"^[a-z][a-z0-9_]*$", text):
+        return text[:80]
+    # Remove special characters, keep alphanumeric, spaces, and underscores
+    cleaned = re.sub(r"[^a-zA-Z0-9\s_]", "", text)
     # Split on spaces, camelCase boundaries, or underscores
     words = re.split(r"[\s_]+", cleaned.strip())
     # Join with underscores, lowercase
