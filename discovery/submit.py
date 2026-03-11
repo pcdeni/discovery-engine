@@ -93,16 +93,20 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
     submissions_dir = repo / "submissions"
     submissions_dir.mkdir(exist_ok=True)
 
+    # Detect default branch (main or master)
+    default_branch = _detect_default_branch(repo)
+    logger.info(f"Using default branch: {default_branch}")
+
     # Create branch name
     user = config.get_github_user() or "anonymous"
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     branch_name = f"contrib/{user}/{timestamp}"
 
     try:
-        # Ensure we're on main and up to date
-        _git(repo, "checkout", "main")
+        # Ensure we're on default branch and up to date
+        _git(repo, "checkout", default_branch)
         try:
-            _git(repo, "pull", "origin", "main")
+            _git(repo, "pull", "origin", default_branch)
         except RuntimeError:
             pass  # might not have remote set up
 
@@ -131,7 +135,7 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
              "--title", pr_title,
              "--body", pr_body,
              "--repo", UPSTREAM_REPO,
-             "--base", "main"],
+             "--base", default_branch],
             cwd=repo,
             capture_output=True,
             text=True,
@@ -150,19 +154,55 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
             logger.warning(f"PR creation may have failed: {result.stderr}")
             logger.info("Files kept in batch directory. Run 'discovery submit' to retry.")
 
-        # Switch back to main
-        _git(repo, "checkout", "main")
+        # Switch back to default branch
+        _git(repo, "checkout", default_branch)
 
         return {"submitted": len(result_files), "pr_url": pr_url, "branch": branch_name}
 
     except Exception as e:
         logger.error(f"Submission failed: {e}")
-        # Try to get back to main
+        # Try to get back to default branch
         try:
-            _git(repo, "checkout", "main")
+            _git(repo, "checkout", default_branch)
         except Exception:
             pass
         return {"submitted": 0, "error": str(e)}
+
+
+def _detect_default_branch(repo_path: Path) -> str:
+    """Detect the default branch (main or master) of a repo."""
+    try:
+        # Check what HEAD points to on origin
+        result = subprocess.run(
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            # Output like "refs/remotes/origin/master"
+            ref = result.stdout.strip()
+            return ref.split("/")[-1]
+    except Exception:
+        pass
+
+    # Fallback: check which local branches exist
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--list"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        branches = [b.strip().lstrip("* ") for b in result.stdout.strip().split("\n")]
+        if "main" in branches:
+            return "main"
+        if "master" in branches:
+            return "master"
+    except Exception:
+        pass
+
+    return "main"  # last resort default
 
 
 def _git(repo_path: Path, *args):
@@ -206,8 +246,9 @@ def _auto_clone_repo() -> Optional[Path]:
     if repo_dir.exists() and (repo_dir / ".git").exists():
         # Already cloned, just pull
         try:
-            _git(repo_dir, "checkout", "main")
-            _git(repo_dir, "pull", "origin", "main")
+            default_branch = _detect_default_branch(repo_dir)
+            _git(repo_dir, "checkout", default_branch)
+            _git(repo_dir, "pull", "origin", default_branch)
             return repo_dir
         except RuntimeError:
             # Corrupted, re-clone
