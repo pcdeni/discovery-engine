@@ -108,13 +108,15 @@ def run_loop(
             logger.info(f"Reached target of {count} papers. Stopping.")
             break
 
-        # Discover fresh papers from APIs
+        # Discover fresh papers from APIs — always request a decent pool
+        # so filtering out already-processed papers doesn't leave us empty
         remaining = (count - papers_done) if count else 200
+        fetch_count = max(remaining * 3, 50)  # fetch 3x what we need, min 50
         logger.info(f"\n--- Round {round_num}: Discovering papers ---")
 
         paper_queue = discover_papers(
             source=source,
-            max_per_source=min(remaining, 200),
+            max_per_source=min(fetch_count, 500),
             lookback_days=lookback_days,
             exclude=all_processed,
             shuffle=True,
