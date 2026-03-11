@@ -184,8 +184,11 @@ def normalize_file_inplace(filepath: str | Path) -> list[str]:
     Normalize a file in place. Returns list of changes made.
     """
     filepath = Path(filepath)
-    with open(filepath, encoding="utf-8") as f:
-        original = json.load(f)
+    try:
+        with open(filepath, encoding="utf-8") as f:
+            original = json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return []  # skip malformed files
 
     if not isinstance(original, dict):
         return []  # skip non-dict JSON files
