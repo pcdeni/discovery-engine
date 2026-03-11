@@ -90,7 +90,7 @@ The system is fully decentralized:
 - Papers are discovered from public APIs (no central queue needed)
 - A tracking file on GitHub (`processed_papers.jsonl`) prevents duplicate work
 - Results are submitted as PRs, validated by CI, and merged into the dataset
-- Merged results sync to HuggingFace for public access
+- Merged results are stored in the GitHub repo under `results/`
 
 Papers connect when one's `provides` matches another's `requires`, enabling
 cross-domain scientific discovery at scale.
