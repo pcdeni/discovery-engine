@@ -1,0 +1,168 @@
+{
+  "paper_analysis": {
+    "objective": "To analyze the Korringa ratio in a dirty metal, particularly in the presence of Stoner enhancement of the uniform susceptibility.",
+    "method": "The study examines the relaxation rates and their enhancement by disorder, focusing on the inverse problem of determining the bare density of states from changes in the Knight shift and relaxation rates under varying parameters like pressure.",
+    "key_findings": [
+      "Relaxation rates are significantly enhanced by disorder.",
+      "The inverse problem of determining the bare density of states has constrained solutions, with disorder playing a crucial role."
+    ],
+    "limitations": [
+      "The analysis is preliminary, particularly in its application to chemical substitution in the Rb$_{3-x}$K$_x$C$_{60}$ family of superconductors."
+    ],
+    "context": "This study contributes to the broader field of condensed matter physics, particularly in understanding the effects of disorder on relaxation rates and the determination of bare density of states.",
+    "cross_domain_yield": "MEDIUM",
+    "known_analogues": []
+  },
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Korringa ratio",
+      "aliases": [],
+      "type": "phenomenon",
+      "description": "A ratio used in condensed matter physics to relate the Knight shift and nuclear spin-lattice relaxation rate.",
+      "domains": [
+        "condensed matter physics"
+      ],
+      "source": "Abstract",
+      "quote": "We present an analysis of the Korringa ratio in a dirty metal."
+    },
+    {
+      "id": "E2",
+      "name": "Stoner enhancement",
+      "aliases": [],
+      "type": "phenomenon",
+      "description": "An enhancement of the uniform susceptibility in metals due to electron-electron interactions.",
+      "domains": [
+        "condensed matter physics"
+      ],
+      "source": "Abstract",
+      "quote": "Emphasizing the case where a Stoner enhancement of the uniform susceptibilty is present."
+    },
+    {
+      "id": "E3",
+      "name": "Rb$_{3-x}$K$_x$C$_{60}$",
+      "aliases": [],
+      "type": "compound",
+      "description": "A family of superconductors studied in the context of chemical substitution.",
+      "domains": [
+        "condensed matter physics",
+        "superconductivity"
+      ],
+      "source": "Abstract",
+      "quote": "Some preliminary applications to the case of chemical substitution in the Rb$_{3-x}$K$_x$C$_{60}$ family of superconductors is presented."
+    }
+  ],
+  "properties": [
+    {
+      "id": "P1",
+      "entity_id": "E1",
+      "name": "relaxation rates",
+      "value": "significantly enhanced",
+      "unit": null,
+      "conditions": [
+        {
+          "parameter": "disorder",
+          "value": "present"
+        }
+      ],
+      "confidence": "measured",
+      "source": "Abstract",
+      "quote": "We find that the relaxation rates are significantly enhanced by disorder."
+    }
+  ],
+  "relations": [
+    {
+      "id": "R1",
+      "from_id": "E2",
+      "to_id": "E1",
+      "type": "improves",
+      "mechanism": "Stoner enhancement improves the analysis of the Korringa ratio by providing a context of enhanced uniform susceptibility.",
+      "strength": "verified",
+      "source": "Abstract"
+    },
+    {
+      "id": "R2",
+      "from_id": "E3",
+      "to_id": "E1",
+      "type": "composes_with",
+      "mechanism": "The Rb$_{3-x}$K$_x$C$_{60}$ family of superconductors composes with the Korringa ratio analysis in the context of chemical substitution.",
+      "strength": "likely",
+      "source": "Abstract"
+    }
+  ],
+  "cross_domain": {
+    "core_friction": "Determining the intrinsic properties of a system when external factors significantly alter observable measurements.",
+    "mechanism": {
+      "description": "Analyzes how external disorder affects internal relaxation rates and susceptibility.",
+      "structural_pattern": "Inverse problem solving under constraints.",
+      "performance": "Significant enhancement of relaxation rates observed.",
+      "conditions": [
+        "Presence of disorder"
+      ],
+      "failure_modes": [
+        "Limited solutions due to disorder"
+      ],
+      "physical_constraints": [
+        "Requires precise measurement of relaxation rates and susceptibility"
+      ]
+    },
+    "unsolved_tensions": [
+      {
+        "tension": "The inverse problem has constrained solutions due to disorder.",
+        "constraint_class": "accuracy-disorder tradeoff",
+        "why_it_matters": "Disorder complicates the determination of intrinsic properties, limiting the accuracy of the analysis.",
+        "source_quote": "The inverse problem of determining the bare density of states from a study of the change of the Knight shift and relaxation rates with some parameter, such as pressure, has rather constrained solutions, with the disorder playing an important role."
+      }
+    ],
+    "bridge_tags": [
+      "inverse_problem_solving",
+      "disorder_effects",
+      "relaxation_rate_analysis"
+    ],
+    "interface": {
+      "provides": [
+        {
+          "operation": "relaxation_rate_enhancement_analysis",
+          "description": "Analyzes how disorder enhances relaxation rates in a system.",
+          "performance": "Significant enhancement observed",
+          "conditions": [
+            "Presence of disorder"
+          ]
+        }
+      ],
+      "requires": [
+        {
+          "operation": "precise_measurement_of_relaxation_rates",
+          "description": "Accurate measurement of relaxation rates and susceptibility.",
+          "reason": "Necessary for determining the intrinsic properties of the system."
+        }
+      ]
+    },
+    "mechanism_components": [
+      {
+        "name": "Korringa ratio",
+        "role": "Key metric for analyzing relaxation rates and susceptibility."
+      },
+      {
+        "name": "Stoner enhancement",
+        "role": "Provides context of enhanced uniform susceptibility."
+      },
+      {
+        "name": "Rb$_{3-x}$K$_x$C$_{60}$",
+        "role": "Example system for applying the analysis in the context of chemical substitution."
+      }
+    ]
+  },
+  "_meta": {
+    "model": "deepseek/deepseek-chat",
+    "provider": "openrouter",
+    "extraction_seconds": 119.3,
+    "prompt_version": "v_combined",
+    "paper_id": "arxiv:cond-mat/9307047",
+    "source": "arxiv",
+    "text_source": "abstract",
+    "extracted_by": "anonymous",
+    "extracted_at": "2026-03-11T15:49:38.319008+00:00",
+    "title": "What Does The Korringa Ratio Measure?"
+  }
+}
