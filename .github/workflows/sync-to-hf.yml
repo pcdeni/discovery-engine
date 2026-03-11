@@ -1,5 +1,5 @@
 # After a PR merges, push new extraction results to HuggingFace dataset.
-# Cleans up submissions/ directory after successful push.
+# Also auto-updates processed_papers.jsonl so contributors don't re-process.
 
 name: Sync to HuggingFace
 
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # need history for diff
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -31,7 +31,6 @@ jobs:
       - name: Find new submission files
         id: files
         run: |
-          # Find JSON files in submissions/
           files=$(find submissions/ -name '*.json' -type f 2>/dev/null || true)
           count=$(echo "$files" | grep -c '.json' || echo 0)
           echo "count=$count" >> $GITHUB_OUTPUT
@@ -56,7 +55,6 @@ jobs:
           for f in submissions:
               data = json.loads(f.read_text())
               paper_id = data.get('_meta', {}).get('paper_id', f.stem)
-              # Upload to results/ directory in the HF dataset
               api.upload_file(
                   path_or_fileobj=str(f),
                   path_in_repo=f'results/{f.name}',
@@ -66,44 +64,62 @@ jobs:
               )
               print(f'  Uploaded: {f.name} -> {paper_id}')
 
-          print('Sync complete.')
+          print('HuggingFace sync complete.')
           "
 
-      - name: Clean up submissions
+      - name: Update processed_papers.jsonl
         if: steps.files.outputs.count > 0
-        run: |
-          # Remove synced files from submissions/
-          find submissions/ -name '*.json' -type f -delete
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add submissions/
-          git diff --staged --quiet || git commit -m "Clean up synced submissions"
-          git push
-
-      - name: Update stats
-        if: steps.files.outputs.count > 0
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python -c "
-          import json, os
-          from datetime import datetime, timezone
+          import json
           from pathlib import Path
-          from huggingface_hub import HfApi
+          from datetime import datetime, timezone
 
-          # Count total results
-          api = HfApi(token=os.environ['HF_TOKEN'])
-          repo_id = 'discovery-engine/results'
+          # Read existing processed papers
+          tracking_file = Path('processed_papers.jsonl')
+          existing_ids = set()
+          if tracking_file.exists():
+              for line in tracking_file.read_text().strip().split('\n'):
+                  if line.strip():
+                      try:
+                          entry = json.loads(line)
+                          existing_ids.add(entry.get('paper_id', ''))
+                      except json.JSONDecodeError:
+                          pass
 
-          try:
-              files = api.list_repo_files(repo_id=repo_id, repo_type='dataset')
-              result_count = sum(1 for f in files if f.startswith('results/') and f.endswith('.json'))
-          except Exception:
-              result_count = 0
+          # Add new paper IDs from submissions
+          new_entries = []
+          for f in sorted(Path('submissions').glob('*.json')):
+              data = json.loads(f.read_text())
+              meta = data.get('_meta', {})
+              paper_id = meta.get('paper_id', f.stem)
 
-          stats = {
-              'total_papers': result_count,
-              'last_updated': datetime.now(timezone.utc).isoformat(),
-          }
-          print(json.dumps(stats, indent=2))
+              if paper_id not in existing_ids:
+                  new_entries.append({
+                      'paper_id': paper_id,
+                      'source': meta.get('source', 'unknown'),
+                      'extracted_by': meta.get('extracted_by', 'unknown'),
+                      'merged_at': datetime.now(timezone.utc).isoformat(),
+                  })
+
+          if new_entries:
+              with open(tracking_file, 'a', encoding='utf-8') as f:
+                  for entry in new_entries:
+                      f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+              print(f'Added {len(new_entries)} paper(s) to processed_papers.jsonl')
+          else:
+              print('No new papers to add to tracking file')
           "
+
+      - name: Clean up and commit
+        if: steps.files.outputs.count > 0
+        run: |
+          # Remove synced submission files
+          find submissions/ -name '*.json' -type f -delete
+
+          # Commit tracking update + cleanup
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add processed_papers.jsonl submissions/
+          git diff --staged --quiet || git commit -m "Sync: update tracking + clean submissions"
+          git push

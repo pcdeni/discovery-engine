@@ -4,6 +4,10 @@ Batch submission — create a PR with extraction results.
 After running `discovery run`, results accumulate in ~/.discovery/data/batch/.
 This module creates a GitHub PR to submit them.
 
+Supports two modes:
+1. Local repo mode: If run from within a cloned discovery-engine repo
+2. Auto-clone mode: Automatically clones the repo to a temp directory
+
 Usage:
     discovery submit              # submit all pending results
     discovery submit --dry-run    # show what would be submitted
@@ -21,6 +25,9 @@ from . import config
 
 logger = logging.getLogger("discovery.submit")
 
+# The main repo to submit PRs against
+UPSTREAM_REPO = "pcdeni/discovery-engine"
+
 
 def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict:
     """
@@ -28,8 +35,8 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
 
     Steps:
     1. Collect all JSON files from ~/.discovery/data/batch/
-    2. Copy them to the repo's submissions/ directory
-    3. Create a branch, commit, push, create PR
+    2. Find or clone the repo
+    3. Create a branch, copy JSONs to submissions/, commit, push, create PR
 
     Returns:
         {"submitted": int, "pr_url": str} or {"submitted": 0} if nothing to submit
@@ -67,15 +74,23 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
         return {"submitted": 0, "would_submit": len(result_files)}
 
     # Determine repo path
-    repo_path = Path(repo_path) if repo_path else _find_repo_root()
-    if not repo_path:
-        logger.error(
-            "Could not find discovery-engine repo. "
-            "Either run from within the repo or specify --repo-path."
-        )
-        return {"submitted": 0}
+    if repo_path:
+        repo = Path(repo_path)
+    else:
+        repo = _find_repo_root()
 
-    submissions_dir = repo_path / "submissions"
+    if not repo:
+        # Auto-clone the repo
+        logger.info("No local repo found. Cloning from GitHub...")
+        repo = _auto_clone_repo()
+        if not repo:
+            logger.error(
+                "Could not clone discovery-engine repo. "
+                "Make sure you have git + gh CLI installed and authenticated."
+            )
+            return {"submitted": 0, "error": "no_repo"}
+
+    submissions_dir = repo / "submissions"
     submissions_dir.mkdir(exist_ok=True)
 
     # Create branch name
@@ -84,21 +99,28 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
     branch_name = f"contrib/{user}/{timestamp}"
 
     try:
+        # Ensure we're on main and up to date
+        _git(repo, "checkout", "main")
+        try:
+            _git(repo, "pull", "origin", "main")
+        except RuntimeError:
+            pass  # might not have remote set up
+
         # Create branch
-        _git(repo_path, "checkout", "-b", branch_name)
+        _git(repo, "checkout", "-b", branch_name)
 
         # Copy files to submissions/
         for f in result_files:
             dest = submissions_dir / f.name
             shutil.copy2(f, dest)
-            _git(repo_path, "add", str(dest.relative_to(repo_path)))
+            _git(repo, "add", str(dest.relative_to(repo)))
 
         # Commit
         msg = f"Add {len(result_files)} extraction result(s)\n\nContributor: {user}\nModel: {config.get_model()}"
-        _git(repo_path, "commit", "-m", msg)
+        _git(repo, "commit", "-m", msg)
 
         # Push
-        _git(repo_path, "push", "-u", "origin", branch_name)
+        _git(repo, "push", "-u", "origin", branch_name)
 
         # Create PR using gh CLI
         pr_title = f"[extraction] {len(result_files)} papers by {user}"
@@ -108,8 +130,9 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
             ["gh", "pr", "create",
              "--title", pr_title,
              "--body", pr_body,
+             "--repo", UPSTREAM_REPO,
              "--base", "main"],
-            cwd=repo_path,
+            cwd=repo,
             capture_output=True,
             text=True,
         )
@@ -128,7 +151,7 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
             logger.info("Files kept in batch directory. Run 'discovery submit' to retry.")
 
         # Switch back to main
-        _git(repo_path, "checkout", "main")
+        _git(repo, "checkout", "main")
 
         return {"submitted": len(result_files), "pr_url": pr_url, "branch": branch_name}
 
@@ -136,7 +159,7 @@ def submit_batch(dry_run: bool = False, repo_path: Optional[str] = None) -> dict
         logger.error(f"Submission failed: {e}")
         # Try to get back to main
         try:
-            _git(repo_path, "checkout", "main")
+            _git(repo, "checkout", "main")
         except Exception:
             pass
         return {"submitted": 0, "error": str(e)}
@@ -156,22 +179,82 @@ def _git(repo_path: Path, *args):
 
 
 def _find_repo_root() -> Optional[Path]:
-    """Find the discovery-engine repo root (look for prompts/v_combined.txt)."""
-    # Check common locations
+    """Find the discovery-engine repo root."""
     candidates = [
         Path.cwd(),
         Path.cwd().parent,
         Path.home() / "discovery-engine",
         Path.home() / "projects" / "discovery-engine",
+        config.CONFIG_DIR / "repo",
     ]
 
     for candidate in candidates:
-        if (candidate / "prompts" / "v_combined.txt").exists():
-            return candidate
+        if not candidate.exists():
+            continue
         if (candidate / "discovery" / "__init__.py").exists():
+            return candidate
+        if (candidate / "prompts" / "v_combined.txt").exists():
             return candidate
 
     return None
+
+
+def _auto_clone_repo() -> Optional[Path]:
+    """Auto-clone the discovery-engine repo to ~/.discovery/repo/."""
+    repo_dir = config.CONFIG_DIR / "repo"
+
+    if repo_dir.exists() and (repo_dir / ".git").exists():
+        # Already cloned, just pull
+        try:
+            _git(repo_dir, "checkout", "main")
+            _git(repo_dir, "pull", "origin", "main")
+            return repo_dir
+        except RuntimeError:
+            # Corrupted, re-clone
+            shutil.rmtree(repo_dir, ignore_errors=True)
+
+    try:
+        # First, fork the repo (gh will skip if already forked)
+        subprocess.run(
+            ["gh", "repo", "fork", UPSTREAM_REPO, "--clone=false"],
+            capture_output=True,
+            text=True,
+        )
+
+        # Get the user's fork URL
+        user = config.get_github_user()
+        if user:
+            fork_url = f"https://github.com/{user}/discovery-engine.git"
+        else:
+            fork_url = f"https://github.com/{UPSTREAM_REPO}.git"
+
+        # Clone
+        result = subprocess.run(
+            ["git", "clone", fork_url, str(repo_dir)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            # Fall back to cloning upstream directly
+            result = subprocess.run(
+                ["git", "clone", f"https://github.com/{UPSTREAM_REPO}.git", str(repo_dir)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                return None
+
+        # Set upstream remote
+        try:
+            _git(repo_dir, "remote", "add", "upstream", f"https://github.com/{UPSTREAM_REPO}.git")
+        except RuntimeError:
+            pass  # already exists
+
+        return repo_dir
+
+    except Exception as e:
+        logger.error(f"Auto-clone failed: {e}")
+        return None
 
 
 def _build_pr_body(result_files: list[Path], user: str) -> str:

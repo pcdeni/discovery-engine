@@ -33,11 +33,15 @@ def main():
     run_parser.add_argument("--count", type=int, help="Stop after N papers (default: run forever)")
     run_parser.add_argument("--tier", default="open", choices=["open", "institutional", "all"],
                            help="Access tier filter (default: open)")
-    run_parser.add_argument("--source", help="Only papers from this source (arxiv, pmc, etc.)")
+    run_parser.add_argument("--source", help="Only papers from this source (arxiv, pmc, openalex, osti)")
     run_parser.add_argument("--batch-size", type=int, help="Papers per submission batch")
     run_parser.add_argument("--provider", help="LLM provider (anthropic, openrouter, gemini, openai)")
     run_parser.add_argument("--model", help="LLM model name")
-    run_parser.add_argument("--dry-run", action="store_true", help="Fetch papers but don't extract")
+    run_parser.add_argument("--dry-run", action="store_true", help="Discover papers but don't extract")
+    run_parser.add_argument("--auto-submit", action="store_true",
+                           help="Auto-create PR when batch is full")
+    run_parser.add_argument("--lookback-days", type=int, default=30,
+                           help="How far back to search for papers (default: 30)")
 
     # ── submit ──────────────────────────────────────────────────────
     submit_parser = subparsers.add_parser("submit", help="Submit pending results as PR")
@@ -101,6 +105,8 @@ def cmd_run(args):
         batch_size=args.batch_size,
         provider=args.provider,
         model=args.model,
+        auto_submit=args.auto_submit,
+        lookback_days=args.lookback_days,
     )
 
 
@@ -196,9 +202,15 @@ def cmd_config(args):
 def cmd_status(args):
     config.ensure_dirs()
 
+    # Global processed (from GitHub)
+    print("Checking global state...")
+    from .discover import fetch_processed_ids
+    global_ids = fetch_processed_ids()
+    print(f"Papers processed globally: {len(global_ids)}")
+
     # Batch status
     batch_files = list(config.BATCH_DIR.glob("*.json"))
-    print(f"Pending in batch: {len(batch_files)}")
+    print(f"\nPending in batch: {len(batch_files)}")
     if batch_files:
         sources = {}
         for f in batch_files:
@@ -208,7 +220,7 @@ def cmd_status(args):
         for src, cnt in sorted(sources.items()):
             print(f"  {src}: {cnt}")
 
-    # Progress
+    # Local progress
     if config.PROGRESS_FILE.exists():
         with open(config.PROGRESS_FILE, encoding="utf-8") as f:
             lines = f.readlines()
@@ -220,11 +232,11 @@ def cmd_status(args):
                 statuses[s] = statuses.get(s, 0) + 1
             except json.JSONDecodeError:
                 continue
-        print(f"\nLifetime progress: {len(lines)} papers")
+        print(f"\nLocal progress: {len(lines)} papers")
         for s, cnt in sorted(statuses.items()):
             print(f"  {s}: {cnt}")
     else:
-        print("\nNo extraction history yet.")
+        print("\nNo local extraction history yet.")
 
     # Config
     cfg = config.load_config()

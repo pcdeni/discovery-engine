@@ -10,7 +10,7 @@
 
 ```bash
 # Clone and install
-git clone https://github.com/discovery-engine/discovery-engine
+git clone https://github.com/pcdeni/discovery-engine
 cd discovery-engine
 pip install -e ".[anthropic]"   # or your preferred provider
 
@@ -24,6 +24,9 @@ discovery config --github-user YOUR_GITHUB_USERNAME
 ### Basic usage (recommended for first-time contributors)
 
 ```bash
+# Preview what would be processed (no LLM calls)
+discovery run --count 5 --dry-run
+
 # Extract 5 papers to test your setup
 discovery run --count 5
 
@@ -37,25 +40,42 @@ discovery validate ~/.discovery/data/batch/
 ### Autonomous mode (walk away and let it run)
 
 ```bash
-# Run forever, processing open-access papers
-discovery run
+# Run forever, auto-submit PRs when batch is full
+discovery run --auto-submit
 
 # Or with options:
-discovery run --source arxiv --model claude-sonnet-4-20250514
+discovery run --source arxiv --model claude-sonnet-4-20250514 --auto-submit
+discovery run --count 100 --auto-submit   # stop after 100 papers
 ```
 
 ### What happens during extraction
 
-1. The CLI fetches an unclaimed paper from the index
-2. Downloads full text (if available) or abstract
-3. Sends it through the combined extraction prompt via your LLM
-4. Normalizes the output (fixes snake_case, restructures if needed)
-5. Validates against the schema
-6. Saves to your local batch (~/.discovery/data/batch/)
+1. The CLI queries scientific databases (arXiv, PMC, OpenAlex, OSTI) for recent papers
+2. Checks `processed_papers.jsonl` on GitHub to skip already-processed papers
+3. Downloads full text (if available) or abstract
+4. Sends it through the combined extraction prompt via your LLM
+5. Normalizes the output (fixes snake_case, restructures if needed)
+6. Validates against the schema
+7. Saves to your local batch (~/.discovery/data/batch/)
+8. Auto-submits PR when batch is full (if `--auto-submit` is set)
+
+### Using cheaper models
+
+```bash
+# OpenRouter: DeepSeek V3 at $0.002/paper
+pip install -e ".[all]"
+discovery config --provider openrouter --api-key YOUR_KEY
+discovery config --model deepseek/deepseek-chat
+discovery run --auto-submit
+
+# Google: Gemini Flash at $0.003/paper
+discovery config --provider gemini --api-key YOUR_KEY
+discovery run --auto-submit
+```
 
 ## Submitting Results
 
-When you have results ready:
+If not using `--auto-submit`:
 
 ```bash
 # Preview what would be submitted
@@ -66,6 +86,7 @@ discovery submit
 ```
 
 This creates a branch, commits your results to `submissions/`, and opens a PR.
+If you don't have the repo cloned locally, it auto-clones to `~/.discovery/repo/`.
 
 ## Quality Requirements
 
@@ -83,9 +104,18 @@ Every submission must pass:
 - **Established (10-50 PRs):** Auto-merge if CI passes, spot-checked weekly
 - **Trusted (50+ PRs):** Full auto-merge
 
+## How Duplicate Prevention Works
+
+The system uses `processed_papers.jsonl` in the repo root as a shared tracking file:
+- When a PR is merged, CI auto-appends the paper IDs to this file
+- When you run `discovery run`, it fetches this file from GitHub
+- Papers already in the file are skipped
+- This prevents contributors from wasting time on already-processed papers
+
 ## Tips
 
 - **Cheaper models work fine.** Gemini Flash and DeepSeek V3 produce valid schema at 1/10th the cost of Sonnet.
 - **Full text > abstract.** Papers with full text produce richer extractions. PMC OA and arXiv have free full text.
-- **Run overnight.** Set `discovery run --count 100` before bed, submit in the morning.
+- **Run overnight.** Set `discovery run --count 100 --auto-submit` before bed. It'll process and submit automatically.
 - **Check validation failures.** If a paper fails validation, it's usually a model issue (bad JSON structure). The normalizer fixes most common issues automatically.
+- **Source-specific runs.** Use `--source arxiv` or `--source pmc` to focus on a single database.
