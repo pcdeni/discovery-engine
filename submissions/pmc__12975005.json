@@ -1,0 +1,286 @@
+{
+  "paper_analysis": {
+    "objective": "To synthesize current evidence on the epidemiology, pathophysiology, causative pathogens, clinical outcomes, and management of community-acquired pneumonia (CAP) in adults with diabetes and to identify research gaps for future trials.",
+    "method": "A narrative review of PubMed, EMBASE, the Cochrane Library, and Web of Science from 1999 to August 2025 was conducted. GRADE was used to rate evidence from 81 selected English-language studies, including randomized controlled trials, cohorts, and meta-analyses.",
+    "key_findings": [
+      "Diabetes increases CAP incidence (relative risk 1.73, 95% CI 1.46-2.04), hospitalization (+30%-50%), and 30-day mortality (odds ratio 1.67, 95% CI 1.45-1.92).",
+      "Key drivers include hyperglycemia-induced immune paralysis, pulmonary microangiopathy, ferroptosis, glycation and methylation changes, and gut-lung dysbiosis.",
+      "Host-targeted therapy with moderate glycemic control (5-10 mmol/L), continued metformin, and pathogen-directed antibiotics improves survival.",
+      "Single-dose PCV20 and annual influenza vaccination prevent approximately 45% of CAP admissions."
+    ],
+    "limitations": [
+      "Emerging strategies such as nanozymes, ferroptosis inhibitors, probiotics, and proteolysis-targeting chimeras are still preclinical.",
+      "Multicenter randomized controlled trials integrating tight glucose monitoring, novel host-directed agents, and microbiome modulation are needed."
+    ],
+    "context": "CAP in patients with diabetes is a distinct, more severe entity mediated by metabolic-immune crosstalk.",
+    "cross_domain_yield": "MEDIUM",
+    "known_analogues": []
+  },
+  "entities": [
+    {
+      "id": "E1",
+      "name": "community-acquired pneumonia",
+      "aliases": [
+        "CAP"
+      ],
+      "type": "disease",
+      "description": "A severe respiratory infection that occurs in individuals with diabetes, leading to increased hospitalization and mortality.",
+      "domains": [
+        "infectious diseases",
+        "diabetes research"
+      ],
+      "source": "Abstract",
+      "quote": "Patients with diabetes carry a 1.5- to 2-fold higher risk of community-acquired pneumonia (CAP) and experience more severe outcomes."
+    },
+    {
+      "id": "E2",
+      "name": "diabetes",
+      "aliases": [],
+      "type": "disease",
+      "description": "A metabolic disorder characterized by hyperglycemia, which increases the risk and severity of CAP.",
+      "domains": [
+        "diabetes research",
+        "metabolic disorders"
+      ],
+      "source": "Abstract",
+      "quote": "Diabetes increases CAP incidence (relative risk 1.73, 95% CI 1.46-2.04)."
+    },
+    {
+      "id": "E3",
+      "name": "hyperglycemia-induced immune paralysis",
+      "aliases": [],
+      "type": "phenomenon",
+      "description": "A condition where high blood sugar levels impair the immune system's ability to fight infections.",
+      "domains": [
+        "immunology",
+        "diabetes research"
+      ],
+      "source": "Abstract",
+      "quote": "Key drivers include hyperglycemia-induced immune paralysis."
+    },
+    {
+      "id": "E4",
+      "name": "ferroptosis",
+      "aliases": [],
+      "type": "phenomenon",
+      "description": "A form of programmed cell death driven by iron-dependent lipid peroxidation, implicated in the severity of CAP in diabetes.",
+      "domains": [
+        "cell biology",
+        "diabetes research"
+      ],
+      "source": "Abstract",
+      "quote": "Key drivers include ferroptosis."
+    },
+    {
+      "id": "E5",
+      "name": "gut-lung dysbiosis",
+      "aliases": [],
+      "type": "phenomenon",
+      "description": "An imbalance in the microbiota of the gut and lungs that contributes to the severity of CAP in diabetes.",
+      "domains": [
+        "microbiology",
+        "diabetes research"
+      ],
+      "source": "Abstract",
+      "quote": "Key drivers include gut-lung dysbiosis."
+    },
+    {
+      "id": "E6",
+      "name": "metformin",
+      "aliases": [],
+      "type": "compound",
+      "description": "A medication used to manage diabetes that improves survival in CAP patients when continued.",
+      "domains": [
+        "pharmacology",
+        "diabetes research"
+      ],
+      "source": "Abstract",
+      "quote": "Host-targeted therapy with continued metformin improves survival."
+    },
+    {
+      "id": "E7",
+      "name": "PCV20",
+      "aliases": [],
+      "type": "compound",
+      "description": "A pneumococcal conjugate vaccine that prevents approximately 45% of CAP admissions.",
+      "domains": [
+        "vaccinology",
+        "infectious diseases"
+      ],
+      "source": "Abstract",
+      "quote": "Single-dose PCV20 prevents approximately 45% of CAP admissions."
+    }
+  ],
+  "properties": [
+    {
+      "id": "P1",
+      "entity_id": "E2",
+      "name": "CAP incidence",
+      "value": "1.73",
+      "unit": "relative risk",
+      "conditions": [
+        {
+          "parameter": "confidence interval",
+          "value": "1.46-2.04"
+        }
+      ],
+      "confidence": "measured",
+      "source": "Abstract",
+      "quote": "Diabetes increases CAP incidence (relative risk 1.73, 95% CI 1.46-2.04)."
+    },
+    {
+      "id": "P2",
+      "entity_id": "E2",
+      "name": "hospitalization increase",
+      "value": "+30%-50%",
+      "unit": "%",
+      "conditions": [],
+      "confidence": "measured",
+      "source": "Abstract",
+      "quote": "Diabetes increases hospitalization (+30%-50%)."
+    },
+    {
+      "id": "P3",
+      "entity_id": "E2",
+      "name": "30-day mortality",
+      "value": "1.67",
+      "unit": "odds ratio",
+      "conditions": [
+        {
+          "parameter": "confidence interval",
+          "value": "1.45-1.92"
+        }
+      ],
+      "confidence": "measured",
+      "source": "Abstract",
+      "quote": "Diabetes increases 30-day mortality (odds ratio 1.67, 95% CI 1.45-1.92)."
+    },
+    {
+      "id": "P4",
+      "entity_id": "E6",
+      "name": "survival improvement",
+      "value": "improves survival",
+      "unit": null,
+      "conditions": [],
+      "confidence": "measured",
+      "source": "Abstract",
+      "quote": "Host-targeted therapy with continued metformin improves survival."
+    },
+    {
+      "id": "P5",
+      "entity_id": "E7",
+      "name": "CAP admission prevention",
+      "value": "45%",
+      "unit": "%",
+      "conditions": [],
+      "confidence": "measured",
+      "source": "Abstract",
+      "quote": "Single-dose PCV20 prevents approximately 45% of CAP admissions."
+    }
+  ],
+  "relations": [
+    {
+      "id": "R1",
+      "from_id": "E2",
+      "to_id": "E1",
+      "type": "enables",
+      "mechanism": "Diabetes increases the risk and severity of CAP by causing hyperglycemia-induced immune paralysis, pulmonary microangiopathy, ferroptosis, glycation and methylation changes, and gut-lung dysbiosis.",
+      "strength": "verified",
+      "source": "Abstract"
+    },
+    {
+      "id": "R2",
+      "from_id": "E6",
+      "to_id": "E1",
+      "type": "improves",
+      "mechanism": "Continued use of metformin improves survival in CAP patients by managing diabetes and enhancing immune response.",
+      "strength": "verified",
+      "source": "Abstract"
+    },
+    {
+      "id": "R3",
+      "from_id": "E7",
+      "to_id": "E1",
+      "type": "blocks",
+      "mechanism": "Single-dose PCV20 prevents approximately 45% of CAP admissions by providing immunity against pneumococcal infections.",
+      "strength": "verified",
+      "source": "Abstract"
+    }
+  ],
+  "cross_domain": {
+    "core_friction": "A systemic condition increases susceptibility to a severe infection by disrupting multiple physiological pathways.",
+    "mechanism": {
+      "description": "A chronic condition disrupts immune function, cellular integrity, and microbial balance, leading to increased severity of infections.",
+      "structural_pattern": "Multiple interconnected pathways amplify vulnerability.",
+      "performance": "Increases infection incidence by 1.73-fold and mortality by 1.67-fold.",
+      "conditions": [
+        "Presence of chronic metabolic disorder"
+      ],
+      "failure_modes": [
+        "Immune paralysis",
+        "Microbial imbalance"
+      ],
+      "physical_constraints": [
+        "Requires chronic metabolic dysregulation"
+      ]
+    },
+    "unsolved_tensions": [
+      {
+        "tension": "Emerging therapies are still preclinical and require validation.",
+        "constraint_class": "scale-up barrier",
+        "why_it_matters": "Without validated therapies, the severe outcomes of the infection cannot be mitigated.",
+        "source_quote": "Emerging strategies (nanozymes, ferroptosis inhibitors, probiotics, and proteolysis-targeting chimeras) are still preclinical."
+      }
+    ],
+    "bridge_tags": [
+      "chronic_condition_amplification",
+      "immune_disruption",
+      "microbial_imbalance"
+    ],
+    "interface": {
+      "provides": [
+        {
+          "operation": "chronic_condition_amplification",
+          "description": "Amplifies the severity of infections by disrupting multiple physiological pathways.",
+          "performance": "Increases infection incidence by 1.73-fold.",
+          "conditions": [
+            "Presence of chronic metabolic disorder"
+          ]
+        }
+      ],
+      "requires": [
+        {
+          "operation": "immune_function_restoration",
+          "description": "Restores immune function to mitigate infection severity.",
+          "reason": "Immune paralysis is a key driver of increased infection severity."
+        }
+      ]
+    },
+    "mechanism_components": [
+      {
+        "name": "hyperglycemia-induced immune paralysis",
+        "role": "Disrupts immune function, increasing infection severity."
+      },
+      {
+        "name": "ferroptosis",
+        "role": "Drives cell death, contributing to tissue damage and infection severity."
+      },
+      {
+        "name": "gut-lung dysbiosis",
+        "role": "Creates microbial imbalance, favoring severe infections."
+      }
+    ]
+  },
+  "_meta": {
+    "model": "deepseek/deepseek-chat",
+    "provider": "openrouter",
+    "extraction_seconds": 185.0,
+    "prompt_version": "v_combined",
+    "paper_id": "pmc:12975005",
+    "source": "pmc",
+    "text_source": "abstract",
+    "extracted_by": "anonymous",
+    "extracted_at": "2026-03-11T15:54:25.995706+00:00",
+    "title": "Community-Acquired Pneumonia in Patients With Diabetes: Narrative Review."
+  }
+}

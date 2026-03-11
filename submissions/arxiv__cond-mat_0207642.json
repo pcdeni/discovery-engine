@@ -1,0 +1,148 @@
+{
+  "paper_analysis": {
+    "objective": "To determine steady states of a semi-infinite solid subject to the Grinfeld instability in systems with a fixed wavelength, using amplitude expansions.",
+    "method": "The paper employs high-order weakly nonlinear amplitude expansions, using system size as a control parameter to circumvent the absence of an instability threshold in extended systems without gravity. The dependence of solution branch structures on gravity levels is analyzed.",
+    "key_findings": [
+      "A transition from supercritical to subcritical bifurcation occurs as gravity increases or nonhydrostatic stress decreases.",
+      "A discrete, possibly infinite, set of solution branches exists at given system parameters.",
+      "The approach is restricted to relatively small nondimensional amplitudes (≲ 0.2)."
+    ],
+    "limitations": [
+      "The method is limited to small nondimensional amplitudes (≲ 0.2).",
+      "The approach does not address larger amplitudes, which will be tackled in a companion paper."
+    ],
+    "context": "This work contributes to the understanding of nonlinear dynamics in semi-infinite solids, particularly in the context of Grinfeld instability and its dependence on gravity.",
+    "cross_domain_yield": "MEDIUM",
+    "known_analogues": [
+      "reminiscent of dendritic or eutectic growth"
+    ]
+  },
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Grinfeld instability",
+      "aliases": [],
+      "type": "phenomenon",
+      "description": "A type of instability occurring in semi-infinite solids, studied in this paper using amplitude expansions.",
+      "domains": [
+        "nonlinear dynamics",
+        "materials science"
+      ],
+      "source": "Abstract",
+      "quote": "Amplitude expansions are used to determine steady states of a semi-infinite solid subject to the Grinfeld instability"
+    },
+    {
+      "id": "E2",
+      "name": "amplitude expansions",
+      "aliases": [],
+      "type": "method",
+      "description": "A mathematical technique used to analyze weakly nonlinear systems, employed here to study the Grinfeld instability.",
+      "domains": [
+        "nonlinear dynamics",
+        "mathematical modeling"
+      ],
+      "source": "Abstract",
+      "quote": "Amplitude expansions are used to determine steady states of a semi-infinite solid"
+    }
+  ],
+  "properties": [
+    {
+      "id": "P1",
+      "entity_id": "E2",
+      "name": "nondimensional amplitude limit",
+      "value": "≲ 0.2",
+      "unit": null,
+      "conditions": [
+        {
+          "parameter": "system parameters",
+          "value": "given values"
+        }
+      ],
+      "confidence": "measured",
+      "source": "Abstract",
+      "quote": "the approach is restricted to relatively small nondimensional amplitudes ($\\lesssim 0.2$)"
+    }
+  ],
+  "relations": [
+    {
+      "id": "R1",
+      "from_id": "E2",
+      "to_id": "E1",
+      "type": "enables",
+      "mechanism": "Amplitude expansions enable the analysis of steady states in semi-infinite solids subject to the Grinfeld instability.",
+      "strength": "verified",
+      "source": "Abstract"
+    }
+  ],
+  "cross_domain": {
+    "core_friction": "Analyzing the stability of a system under varying external constraints without a clear threshold for instability.",
+    "mechanism": {
+      "description": "Uses high-order mathematical expansions to model system behavior under varying constraints.",
+      "structural_pattern": "transition from supercritical to subcritical bifurcation",
+      "performance": "Limited to small nondimensional amplitudes (≲ 0.2)",
+      "conditions": [
+        "works in systems with fixed wavelength"
+      ],
+      "failure_modes": [
+        "fails at larger amplitudes"
+      ],
+      "physical_constraints": [
+        "requires small nondimensional amplitudes"
+      ]
+    },
+    "unsolved_tensions": [
+      {
+        "tension": "Limited to small nondimensional amplitudes (≲ 0.2)",
+        "constraint_class": "amplitude-size tradeoff",
+        "why_it_matters": "Restricts the applicability of the method to systems with larger amplitudes.",
+        "source_quote": "the approach is restricted to relatively small nondimensional amplitudes ($\\lesssim 0.2$)"
+      }
+    ],
+    "bridge_tags": [
+      "nonlinear_system_analysis",
+      "bifurcation_transition",
+      "amplitude_constraint"
+    ],
+    "interface": {
+      "provides": [
+        {
+          "operation": "high_order_nonlinear_analysis",
+          "description": "Analyzes system stability using high-order mathematical expansions under varying constraints.",
+          "performance": "Limited to small nondimensional amplitudes (≲ 0.2)",
+          "conditions": [
+            "works in systems with fixed wavelength"
+          ]
+        }
+      ],
+      "requires": [
+        {
+          "operation": "system_size_control",
+          "description": "Requires control over system size to circumvent the absence of an instability threshold.",
+          "reason": "Necessary to enable analysis in systems without gravity."
+        }
+      ]
+    },
+    "mechanism_components": [
+      {
+        "name": "amplitude expansions",
+        "role": "Mathematical technique used to analyze weakly nonlinear systems."
+      },
+      {
+        "name": "system size",
+        "role": "Control parameter used to circumvent the absence of an instability threshold."
+      }
+    ]
+  },
+  "_meta": {
+    "model": "deepseek/deepseek-chat",
+    "provider": "openrouter",
+    "extraction_seconds": 100.9,
+    "prompt_version": "v_combined",
+    "paper_id": "arxiv:cond-mat/0207642",
+    "source": "arxiv",
+    "text_source": "abstract",
+    "extracted_by": "anonymous",
+    "extracted_at": "2026-03-11T15:47:37.315902+00:00",
+    "title": "Large amplitude behavior of the Grinfeld instability, Part I: High-order weakly nonlinear analysis"
+  }
+}

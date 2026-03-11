@@ -1,0 +1,150 @@
+{
+  "paper_analysis": {
+    "objective": "To derive and analyze a modified Nonlinear Schrödinger Equation (jNLS) from the spacelike reduction of the Chern-Simons Lagrangian, focusing on its solutions and integrability.",
+    "method": "The paper derives the jNLS by replacing the particle density with current in the non-linearity term. It then analyzes the equation under specific conditions, such as a linear phase in position, and explores its integrability by adding a six-order potential.",
+    "key_findings": [
+      "The jNLS admits interesting solutions when the phase is linear in position, explained by the conformal properties of non-relativistic spacetime.",
+      "Only the usual travelling soliton is consistent with the jNLS.",
+      "Adding a six-order potential converts the jNLS into an integrable equation."
+    ],
+    "limitations": [
+      "The analysis is limited to specific conditions, such as a linear phase in position.",
+      "The integrability of the jNLS requires the addition of a six-order potential."
+    ],
+    "context": "This work contributes to the field of nonlinear dynamics and integrable systems, particularly in the context of modified Schrödinger equations derived from Chern-Simons theory.",
+    "cross_domain_yield": "MEDIUM",
+    "known_analogues": []
+  },
+  "entities": [
+    {
+      "id": "E1",
+      "name": "modified Nonlinear Schrödinger Equation",
+      "aliases": [
+        "jNLS"
+      ],
+      "type": "method",
+      "description": "A modified version of the Nonlinear Schrödinger Equation derived from the spacelike reduction of the Chern-Simons Lagrangian, where the non-linearity term replaces particle density with current.",
+      "domains": [
+        "nonlinear dynamics",
+        "integrable systems"
+      ],
+      "source": "Abstract",
+      "quote": "The spacelike reduction of the Chern-Simons Lagrangian yields a modified Nonlinear Schrödinger Equation (jNLS) where in the non-linearity the particle density is replaced by current."
+    },
+    {
+      "id": "E2",
+      "name": "six-order potential",
+      "aliases": [],
+      "type": "other",
+      "description": "A potential term added to the jNLS that converts it into an integrable equation.",
+      "domains": [
+        "nonlinear dynamics",
+        "integrable systems"
+      ],
+      "source": "Abstract",
+      "quote": "Adding a six-order potential converts jnLS into an integrable equation."
+    }
+  ],
+  "properties": [
+    {
+      "id": "P1",
+      "entity_id": "E1",
+      "name": "integrability",
+      "value": "achieved with six-order potential",
+      "unit": null,
+      "conditions": [
+        {
+          "parameter": "potential",
+          "value": "six-order"
+        }
+      ],
+      "confidence": "verified",
+      "source": "Abstract",
+      "quote": "Adding a six-order potential converts jnLS into an integrable equation."
+    }
+  ],
+  "relations": [
+    {
+      "id": "R1",
+      "from_id": "E2",
+      "to_id": "E1",
+      "type": "enables",
+      "mechanism": "The six-order potential enables the integrability of the jNLS by converting it into an integrable equation.",
+      "strength": "verified",
+      "source": "Abstract"
+    }
+  ],
+  "cross_domain": {
+    "core_friction": "Deriving a modified equation that retains integrability under specific constraints.",
+    "mechanism": {
+      "description": "Modifies a known equation by replacing a key term and analyzes its solutions under specific conditions.",
+      "structural_pattern": "Term substitution and integrability analysis under constraints.",
+      "performance": "Integrability achieved with additional potential.",
+      "conditions": [
+        "Linear phase in position",
+        "Addition of six-order potential"
+      ],
+      "failure_modes": [
+        "Without six-order potential, integrability is not guaranteed"
+      ],
+      "physical_constraints": [
+        "Requires specific potential for integrability"
+      ]
+    },
+    "unsolved_tensions": [
+      {
+        "tension": "The integrability of the modified equation depends on the addition of a specific potential.",
+        "constraint_class": "Integrability under specific modifications",
+        "why_it_matters": "This limits the applicability of the modified equation to scenarios where the specific potential can be applied.",
+        "source_quote": "Adding a six-order potential converts jnLS into an integrable equation."
+      }
+    ],
+    "bridge_tags": [
+      "equation_modification",
+      "integrability_analysis",
+      "term_substitution"
+    ],
+    "interface": {
+      "provides": [
+        {
+          "operation": "equation_modification_with_integrability",
+          "description": "Modifies a known equation by substituting a key term and analyzes its integrability under specific conditions.",
+          "performance": "Integrability achieved with additional potential.",
+          "conditions": [
+            "Linear phase in position",
+            "Addition of six-order potential"
+          ]
+        }
+      ],
+      "requires": [
+        {
+          "operation": "specific_potential_addition",
+          "description": "Requires the addition of a specific potential to achieve integrability.",
+          "reason": "The modified equation is not integrable without the specific potential."
+        }
+      ]
+    },
+    "mechanism_components": [
+      {
+        "name": "Chern-Simons Lagrangian",
+        "role": "Source of the modified Nonlinear Schrödinger Equation."
+      },
+      {
+        "name": "six-order potential",
+        "role": "Enables the integrability of the modified equation."
+      }
+    ]
+  },
+  "_meta": {
+    "model": "deepseek/deepseek-chat",
+    "provider": "openrouter",
+    "extraction_seconds": 106.3,
+    "prompt_version": "v_combined",
+    "paper_id": "arxiv:math-ph/9909017",
+    "source": "arxiv",
+    "text_source": "abstract",
+    "extracted_by": "anonymous",
+    "extracted_at": "2026-03-11T15:45:52.178849+00:00",
+    "title": "Edge solitons in the QHE"
+  }
+}
