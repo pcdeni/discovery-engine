@@ -1,0 +1,94 @@
+# After a PR merges: move results, update tracking, clean submissions.
+# No external services needed. Everything stays in GitHub.
+
+name: Post-Merge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'submissions/**'
+
+permissions:
+  contents: write
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Find submission files
+        id: files
+        run: |
+          count=$(find submissions/ -name '*.json' -type f 2>/dev/null | wc -l)
+          echo "count=$count" >> $GITHUB_OUTPUT
+          echo "Found $count submission file(s)"
+
+      - name: Move to results + update tracking
+        if: steps.files.outputs.count > 0
+        run: |
+          python -c "
+          import json, shutil
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          results_dir = Path('results')
+          results_dir.mkdir(exist_ok=True)
+          tracking_file = Path('processed_papers.jsonl')
+
+          # Load existing tracked IDs
+          existing_ids = set()
+          if tracking_file.exists():
+              for line in tracking_file.read_text().strip().split('\n'):
+                  if line.strip():
+                      try:
+                          existing_ids.add(json.loads(line).get('paper_id', ''))
+                      except json.JSONDecodeError:
+                          pass
+
+          # Process each submission
+          moved = 0
+          new_entries = []
+          for f in sorted(Path('submissions').glob('*.json')):
+              data = json.loads(f.read_text())
+              meta = data.get('_meta', {})
+              paper_id = meta.get('paper_id', f.stem)
+
+              # Move to results/
+              dest = results_dir / f.name
+              shutil.move(str(f), str(dest))
+              moved += 1
+
+              # Track if new
+              if paper_id not in existing_ids:
+                  new_entries.append({
+                      'paper_id': paper_id,
+                      'source': meta.get('source', 'unknown'),
+                      'extracted_by': meta.get('extracted_by', 'unknown'),
+                      'merged_at': datetime.now(timezone.utc).isoformat(),
+                  })
+
+          # Append to tracking file
+          if new_entries:
+              with open(tracking_file, 'a', encoding='utf-8') as f:
+                  for entry in new_entries:
+                      f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
+          print(f'Moved {moved} file(s) to results/')
+          print(f'Added {len(new_entries)} paper(s) to tracking')
+          "
+
+      - name: Commit changes
+        if: steps.files.outputs.count > 0
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add results/ processed_papers.jsonl submissions/
+          git diff --staged --quiet || git commit -m "Post-merge: archive results + update tracking"
+          git push

@@ -16,12 +16,8 @@ DATA_DIR = CONFIG_DIR / "data"
 BATCH_DIR = DATA_DIR / "batch"
 PROGRESS_FILE = DATA_DIR / "progress.jsonl"
 
-# Default GitHub repo (where PRs are submitted)
+# Default GitHub repo (where PRs are submitted, results are stored)
 DEFAULT_REPO = "pcdeni/discovery-engine"
-
-# Default HuggingFace datasets
-DEFAULT_HF_INDEX = "discovery-engine/paper-index"
-DEFAULT_HF_RESULTS = "discovery-engine/results"
 
 # GitHub raw URL for tracking file
 PROCESSED_PAPERS_URL = f"https://raw.githubusercontent.com/{DEFAULT_REPO}/main/processed_papers.jsonl"

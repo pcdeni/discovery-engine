@@ -34,10 +34,6 @@ all = [
     "openai>=1.0",
     "google-generativeai>=0.8",
 ]
-hf = [
-    "datasets>=2.0",
-    "huggingface_hub>=0.20",
-]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
@@ -47,8 +43,8 @@ dev = [
 discovery = "discovery.cli:main"
 
 [project.urls]
-Repository = "https://github.com/discovery-engine/discovery-engine"
-Documentation = "https://github.com/discovery-engine/discovery-engine/blob/main/DESIGN.md"
+Repository = "https://github.com/pcdeni/discovery-engine"
+Documentation = "https://github.com/pcdeni/discovery-engine/blob/main/DESIGN.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["discovery"]
