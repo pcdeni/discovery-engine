@@ -1,10 +1,10 @@
 {
   "name": "Discovery Engine — Paper Extraction",
   "tagline": "Extract structured knowledge from scientific papers autonomously",
-  "description": "Autonomous agent that discovers scientific papers from arXiv, PubMed Central, OpenAlex, and OSTI, extracts structured knowledge (entities, relations, cross-domain connections) using any LLM, and contributes results to a growing open-access knowledge graph. Zero setup beyond an API key — just pip install and run. Supports Anthropic, OpenRouter (DeepSeek), Gemini, OpenAI, and local models (ollama, vllm).",
+  "description": "Autonomous agent that discovers scientific papers from arXiv, PubMed Central, OpenAlex, and OSTI, extracts structured knowledge (entities, relations, cross-domain connections) using any LLM, and contributes results to a growing open-access knowledge graph. Self-contained — no pip install needed, just Python 3.10+ and an API key. Supports Anthropic, OpenRouter (DeepSeek), Gemini, OpenAI, and local models (ollama, vllm).",
   "category": "data",
   "tags": ["science", "research", "knowledge-graph", "extraction", "papers", "arxiv", "pubmed"],
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "pricing": "free",
   "support_url": "https://github.com/pcdeni/discovery-engine/issues",
