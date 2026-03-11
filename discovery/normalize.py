@@ -42,6 +42,8 @@ def normalize_result(data: dict) -> dict:
 
     Returns a new dict (does not modify input).
     """
+    if not isinstance(data, dict):
+        return data  # can't normalize non-dict data
     data = json.loads(json.dumps(data))  # deep copy
 
     # ── Fix 1: 'analysis' → 'paper_analysis' ──────────────────────────
@@ -184,6 +186,9 @@ def normalize_file_inplace(filepath: str | Path) -> list[str]:
     filepath = Path(filepath)
     with open(filepath, encoding="utf-8") as f:
         original = json.load(f)
+
+    if not isinstance(original, dict):
+        return []  # skip non-dict JSON files
 
     normalized = normalize_result(original)
 
