@@ -146,38 +146,105 @@ def _fetch_pmc(pmc_id: str) -> Paper:
     """Fetch from PubMed Central. Full text available for OA subset."""
     import httpx
 
-    # Try full text first (PMC OA)
+    # Try full text first (PMC OA via BioC)
+    full_text = ""
     ft_url = f"https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_json/{pmc_id}/unicode"
     resp = httpx.get(ft_url, timeout=30)
 
-    full_text = ""
     if resp.status_code == 200:
         try:
+            # BioC returns HTML error page on non-OA papers (status 200 but not JSON)
             data = resp.json()
-            # BioC format: extract passages
             passages = []
             for doc in data.get("documents", []):
                 for passage in doc.get("passages", []):
                     passages.append(passage.get("text", ""))
-            full_text = "\n\n".join(passages)
-        except Exception:
-            pass
+            full_text = "\n\n".join(p for p in passages if p)
+        except (ValueError, KeyError):
+            pass  # Not JSON = not available in OA subset
 
-    # Also get metadata via E-utilities
+    # Get metadata via E-utilities (esummary)
     meta_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pmc&id={pmc_id}&retmode=json"
     meta_resp = httpx.get(meta_url, timeout=30)
 
-    title, abstract, year, doi, authors = "", "", 0, "", []
+    title, abstract, year, doi, authors, pmid = "", "", 0, "", [], ""
     if meta_resp.status_code == 200:
         try:
             meta = meta_resp.json()
             result = meta.get("result", {}).get(str(pmc_id), {})
             title = result.get("title", "")
-            doi = result.get("doi", "")
             year_str = result.get("pubdate", "")
             year_match = re.search(r"(\d{4})", year_str)
             year = int(year_match.group(1)) if year_match else 0
             authors = [a.get("name", "") for a in result.get("authors", [])[:10]]
+            # Extract DOI and PMID from articleids
+            for aid in result.get("articleids", []):
+                if aid.get("idtype") == "doi" and not doi:
+                    doi = aid.get("value", "")
+                elif aid.get("idtype") == "pmid" and not pmid:
+                    pmid = aid.get("value", "")
+            # Fallback DOI from top-level
+            if not doi:
+                doi = result.get("doi", "")
+        except Exception:
+            pass
+
+    # If no full text and no abstract, try PubMed BioC (needs PMID, not PMC ID)
+    if not full_text and not abstract and pmid:
+        try:
+            pubmed_url = f"https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_json/{pmid}/unicode"
+            pubmed_resp = httpx.get(pubmed_url, timeout=30)
+            if pubmed_resp.status_code == 200:
+                pdata = pubmed_resp.json()
+                for doc in pdata.get("documents", []):
+                    for passage in doc.get("passages", []):
+                        ptype = passage.get("infons", {}).get("type", "")
+                        ptext = passage.get("text", "")
+                        if "abstract" in ptype.lower() and ptext:
+                            abstract = (abstract + " " + ptext).strip() if abstract else ptext
+                        elif "title" in ptype.lower() and ptext and not title:
+                            title = ptext
+        except Exception:
+            pass
+
+    # Fallback: EFetch from PubMed (uses PMID) — returns XML, parse <AbstractText>
+    if not full_text and not abstract and pmid:
+        try:
+            efetch_url = (
+                f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+                f"?db=pubmed&id={pmid}&rettype=abstract&retmode=xml"
+            )
+            efetch_resp = httpx.get(efetch_url, timeout=30)
+            if efetch_resp.status_code == 200:
+                # Extract <AbstractText> elements from PubMed XML
+                abs_parts = re.findall(
+                    r"<AbstractText[^>]*>(.*?)</AbstractText>",
+                    efetch_resp.text, re.DOTALL
+                )
+                if abs_parts:
+                    abstract = " ".join(
+                        re.sub(r"<[^>]+>", "", part).strip() for part in abs_parts
+                    )
+        except Exception:
+            pass
+
+    # Last resort: EFetch from PMC — returns JATS XML, parse <abstract>
+    if not full_text and not abstract:
+        try:
+            efetch_url = (
+                f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+                f"?db=pmc&id={pmc_id}&rettype=xml"
+            )
+            efetch_resp = httpx.get(efetch_url, timeout=30)
+            if efetch_resp.status_code == 200:
+                # Extract <abstract> block and strip XML tags
+                abs_match = re.search(
+                    r"<abstract[^>]*>(.*?)</abstract>",
+                    efetch_resp.text, re.DOTALL
+                )
+                if abs_match:
+                    abstract = re.sub(r"<[^>]+>", " ", abs_match.group(1))
+                    abstract = re.sub(r"\s+", " ", abstract).strip()
         except Exception:
             pass
 
@@ -192,7 +259,7 @@ def _fetch_pmc(pmc_id: str) -> Paper:
         year=year,
         doi=doi,
         authors=authors,
-        access_tier="open" if full_text else "abstract_only",
+        access_tier="open" if full_text else ("abstract_only" if abstract else "no_text"),
     )
 
 
