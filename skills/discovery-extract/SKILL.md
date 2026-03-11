@@ -2,14 +2,14 @@
 name: discovery-extract
 description: Extract structured scientific knowledge from papers. Queries arXiv, PubMed, OpenAlex, OSTI for papers, extracts entities/relations/cross-domain connections via LLM, validates, and submits PRs to the Discovery Engine dataset.
 user-invocable: true
-metadata: {"openclaw": {"requires": {"env": ["ANTHROPIC_API_KEY"], "bins": ["git", "python3"]}, "primaryEnv": "ANTHROPIC_API_KEY"}}
+metadata: {"openclaw": {"requires": {"env": [], "bins": ["git", "gh", "python3"]}, "optionalEnv": ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY"]}}
 ---
 
 # Discovery Engine — Paper Extraction Skill
 
-You are an autonomous scientific paper extraction agent. Your job is to continuously
-discover scientific papers, extract structured knowledge from them, and submit results
-to the Discovery Engine project.
+You are a scientific paper extraction agent. Your job is to discover scientific
+papers, extract structured knowledge from them, validate the output, and submit
+results to the Discovery Engine project.
 
 ## What This Skill Does
 
@@ -20,68 +20,76 @@ to the Discovery Engine project.
    - Layer 1 (Facts): entities, properties, relations
    - Layer 2 (Connections): bridge tags, provides/requires interface, unsolved tensions
 5. **Validates** output against the schema
-6. **Submits** results as a PR to the Discovery Engine GitHub repo
+6. **Saves** results locally for review before submission
+
+## Prerequisites
+
+- **Git** + **GitHub CLI** (`gh`) — authenticated with `gh auth login`
+- **Python 3.10+**
+- **An LLM** — one of: cloud API key (Anthropic, OpenRouter, Gemini, OpenAI) OR a local model (ollama, vllm, llama.cpp)
 
 ## Setup (One-Time)
-
-Run these commands to set up:
 
 ```bash
 # Clone and install
 git clone https://github.com/pcdeni/discovery-engine
 cd discovery-engine
-pip install -e ".[anthropic]"
+pip install -e ".[all]"
 
-# Configure (use your own API key)
-discovery config --provider anthropic --api-key $ANTHROPIC_API_KEY
+# Configure — pick ONE provider:
+
+# Cloud (Anthropic)
+discovery config --provider anthropic --api-key YOUR_KEY
+
+# Cloud (OpenRouter — DeepSeek, Llama, Qwen)
+discovery config --provider openrouter --api-key YOUR_KEY
+discovery config --model deepseek/deepseek-chat
+
+# Cloud (Google Gemini)
+discovery config --provider gemini --api-key YOUR_KEY
+
+# Local (no API key needed — requires ollama/vllm/llama.cpp running)
+discovery config --provider local
+discovery config --model llama3.1
+
+# Set your GitHub username (for PR attribution)
 discovery config --github-user $(git config user.name)
 ```
 
 ## Running Extractions
 
-### Quick test (5 papers)
+### Quick test (recommended first)
 ```bash
-discovery run --count 5 --dry-run    # preview what would be processed
-discovery run --count 5              # actually extract 5 papers
+discovery run --count 5 --dry-run    # preview what would be processed (no LLM calls)
+discovery run --count 5              # extract 5 papers
+discovery validate ~/.discovery/data/batch/   # check results
 ```
 
-### Autonomous mode (run forever, auto-submit PRs)
+### Batch extraction
 ```bash
-discovery run --auto-submit
+discovery run --count 50             # extract 50 papers, review before submitting
+discovery submit --dry-run           # preview what would be submitted
+discovery submit                     # create PR (requires gh auth)
 ```
 
 ### Source-specific extraction
 ```bash
 discovery run --source arxiv --count 50
 discovery run --source pmc --count 50
-discovery run --source openalex --count 50
 discovery run --source osti --count 50
-```
-
-### With other models
-```bash
-# OpenRouter (DeepSeek, Llama, Qwen, etc.)
-pip install -e ".[all]"
-discovery config --provider openrouter --api-key $OPENROUTER_API_KEY
-discovery config --model deepseek/deepseek-chat
-discovery run --auto-submit
-
-# Local LLM (no API key needed)
-discovery config --provider local
-discovery config --model llama3.1
-discovery run --auto-submit
 ```
 
 ## Submitting Results
 
-Results accumulate in `~/.discovery/data/batch/`. Submit them:
+Results accumulate in `~/.discovery/data/batch/`. Submit them as a PR:
 
 ```bash
 discovery submit --dry-run    # preview
-discovery submit              # create PR
+discovery submit              # create PR (requires authenticated gh CLI)
 ```
 
-Or use `--auto-submit` with `discovery run` for fully autonomous operation.
+Submission uses the GitHub CLI (`gh`) to create PRs. Make sure you've run
+`gh auth login` beforehand.
 
 ## Checking Progress
 
@@ -91,11 +99,10 @@ discovery status    # shows local + global progress
 
 ## How It Works
 
-The system is fully decentralized:
-- Each contributor runs their own LLM with their own API key
+- Each contributor runs their own LLM (cloud or local)
 - Papers are discovered from public APIs (no central queue needed)
 - A tracking file on GitHub (`processed_papers.jsonl`) prevents duplicate work
-- Results are submitted as PRs, validated by CI, and merged into the dataset
+- Results are submitted as PRs, validated by CI, and auto-merged if checks pass
 - Merged results are stored in the GitHub repo under `results/`
 
 Papers connect when one's `provides` matches another's `requires`, enabling
