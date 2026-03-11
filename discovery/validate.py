@@ -129,8 +129,6 @@ def validate_result(data: dict, strict: bool = False) -> list[str]:
 
     # ── Relation checks (optional but validated if present) ────────────
 
-    valid_rel_types = {"enables", "inhibits", "enhances", "degrades",
-                       "transforms", "competes_with", "synergizes_with", "requires"}
     for i, rel in enumerate(data.get("relations", [])):
         if not isinstance(rel, dict):
             issues.append(f"FORMAT: relations[{i}] is {type(rel).__name__}, expected dict")
@@ -141,8 +139,9 @@ def validate_result(data: dict, strict: bool = False) -> list[str]:
             issues.append(f"FK_BROKEN: relations[{i}].source_entity '{rel['source_entity']}' not in entities")
         if rel.get("target_entity") and rel["target_entity"] not in entity_ids:
             issues.append(f"FK_BROKEN: relations[{i}].target_entity '{rel['target_entity']}' not in entities")
-        if rel.get("type") and rel["type"] not in valid_rel_types:
-            issues.append(f"INVALID: relations[{i}].type '{rel['type']}'")
+        rel_type = rel.get("type", "")
+        if rel_type and not re.match(r"^[a-z][a-z0-9_]*$", rel_type):
+            issues.append(f"FORMAT: relations[{i}].type '{rel_type}' must be snake_case")
         mechanism = rel.get("mechanism", "")
         if isinstance(mechanism, str) and len(mechanism) < 20:
             issues.append(f"TOO_SHORT: relations[{i}].mechanism (need 20+ chars, got {len(mechanism)})")

@@ -115,7 +115,14 @@ def normalize_result(data: dict) -> dict:
                         fixed_ops.append(op)
                 iface[direction] = fixed_ops
 
-    # ── Fix 5: Mechanism string → dict ─────────────────────────────────
+    # ── Fix 5: Normalize relation types to snake_case ──────────────────
+    for rel in data.get("relations", []):
+        if isinstance(rel, dict) and rel.get("type"):
+            rel_type = rel["type"]
+            if not re.match(r"^[a-z][a-z0-9_]*$", rel_type):
+                rel["type"] = to_snake_case(rel_type)
+
+    # ── Fix 6: Mechanism string → dict ─────────────────────────────────
     mech = cd.get("mechanism")
     if isinstance(mech, str):
         cd["mechanism"] = {
@@ -123,7 +130,7 @@ def normalize_result(data: dict) -> dict:
             "structural_pattern": ""
         }
 
-    # ── Fix 6: Ensure _meta exists ─────────────────────────────────────
+    # ── Fix 7: Ensure _meta exists ─────────────────────────────────────
     if "_meta" not in data:
         data["_meta"] = {}
 

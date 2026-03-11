@@ -152,8 +152,8 @@ def run_loop(
                     local_processed.add(paper_id)
                     continue
 
-                if len(paper.text) < 100:
-                    logger.warning(f"  Text too short ({len(paper.text)} chars). Skipping.")
+                if len(paper.text) < 500:
+                    logger.warning(f"  Text too short ({len(paper.text)} chars, need 500+). Skipping.")
                     _log_progress(progress_file, paper_id, "skip", "text_too_short")
                     all_processed.add(paper_id)
                     local_processed.add(paper_id)
