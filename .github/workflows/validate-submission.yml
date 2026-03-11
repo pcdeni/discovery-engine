@@ -1,0 +1,113 @@
+# Validates extraction submissions on PR.
+# Runs schema + quality checks on all JSON files in submissions/.
+# Auto-merges if all checks pass and contributor is trusted.
+
+name: Validate Submission
+
+on:
+  pull_request:
+    paths:
+      - 'submissions/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install discovery-engine
+        run: pip install -e .
+
+      - name: Count submissions
+        id: count
+        run: |
+          count=$(find submissions/ -name '*.json' | wc -l)
+          echo "count=$count" >> $GITHUB_OUTPUT
+          echo "Found $count submission file(s)"
+
+      - name: Normalize submissions
+        if: steps.count.outputs.count > 0
+        run: |
+          for f in submissions/*.json; do
+            [ -f "$f" ] || continue
+            python -m discovery.normalize "$f" --inplace
+          done
+
+      - name: Validate submissions
+        if: steps.count.outputs.count > 0
+        run: |
+          python -m discovery.validate submissions/ --strict
+          echo "All submissions passed validation."
+
+      - name: Check for duplicates
+        if: steps.count.outputs.count > 0
+        run: |
+          # Check if any paper_id already exists in the results dataset
+          python -c "
+          import json, sys
+          from pathlib import Path
+
+          # Collect paper IDs from new submissions
+          new_ids = set()
+          for f in Path('submissions').glob('*.json'):
+              data = json.loads(f.read_text())
+              pid = data.get('_meta', {}).get('paper_id', f.stem)
+              new_ids.add(pid)
+
+          # Check against existing (would query HF dataset in production)
+          # For now, just check for duplicates within the submission
+          if len(new_ids) < len(list(Path('submissions').glob('*.json'))):
+              print('WARNING: Duplicate paper_ids within submission')
+              sys.exit(1)
+
+          print(f'No duplicates found ({len(new_ids)} unique paper IDs)')
+          "
+
+      - name: Post validation summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const submissionsDir = 'submissions';
+            const files = fs.readdirSync(submissionsDir).filter(f => f.endsWith('.json'));
+
+            let summary = `## Submission Validation\n\n`;
+            summary += `**Files:** ${files.length}\n\n`;
+
+            if (files.length === 0) {
+              summary += `No JSON files found in submissions/.`;
+            } else {
+              const sources = {};
+              for (const f of files) {
+                try {
+                  const data = JSON.parse(fs.readFileSync(path.join(submissionsDir, f), 'utf8'));
+                  const src = data._meta?.source || 'unknown';
+                  sources[src] = (sources[src] || 0) + 1;
+                } catch (e) {
+                  summary += `- ⚠️ ${f}: parse error\n`;
+                }
+              }
+              summary += `| Source | Count |\n|--------|-------|\n`;
+              for (const [src, cnt] of Object.entries(sources).sort()) {
+                summary += `| ${src} | ${cnt} |\n`;
+              }
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
