@@ -90,19 +90,26 @@ If you don't have the repo cloned locally, it auto-clones to `~/.discovery/repo/
 
 ## Quality Requirements
 
-Every submission must pass:
+Every submission goes through the **same automated checks**, every time.
+No trust levels, no shortcuts. All checks pass → auto-merge. Any check fails → rejected.
 
-- **Schema validation:** Required keys present, correct types
-- **Non-empty core fields:** At least 1 entity, 1 bridge tag, 1 tension, 1 provides, 1 requires
-- **Format compliance:** Provides/requires are dicts (not strings), operations are snake_case
-- **Bridge tag quality:** No domain nouns (graphene, insulin), no statistical terms (p-value)
-- **Mechanism depth:** Relation mechanisms are 20+ characters (not just "enables")
+### Layer 1: Schema Validation
+- Required keys present, correct types
+- At least 1 entity, 1 bridge tag, 1 tension, 1 provides, 1 requires
+- Provides/requires are dicts (not strings), operations are snake_case
+- No blocklisted bridge tags (domain nouns, statistical terms)
+- Relation mechanisms are 20+ characters
 
-## Trust Levels
+### Layer 2: Quality Gate
+- **Grounding check:** Extracted entities must actually appear in the paper text. Fabricated data gets caught here.
+- **Honeypot check:** Some papers have reference extractions. If your output diverges significantly, the submission is blocked.
+- **Statistical anomaly detection:** Catches suspiciously minimal outputs, hallucination dumps, uniform structure (copy-paste).
+- **Template abuse detection:** Structural fingerprinting catches mass-generated fake extractions.
+- **Cross-submission dedup:** Duplicate paper IDs or identical structures across results = blocked.
 
-- **New contributors (first 10 PRs):** Manual review by maintainer
-- **Established (10-50 PRs):** Auto-merge if CI passes, spot-checked weekly
-- **Trusted (50+ PRs):** Full auto-merge
+### Layer 3: Duplicate Prevention
+- Papers already in `processed_papers.jsonl` are blocked
+- Duplicate paper IDs within a single batch are blocked
 
 ## How Duplicate Prevention Works
 

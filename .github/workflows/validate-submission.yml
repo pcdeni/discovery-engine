@@ -1,6 +1,6 @@
 # Validates extraction submissions on PR.
-# Runs schema + quality checks on all JSON files in submissions/.
-# Auto-merges if all checks pass and contributor is trusted.
+# Every submission gets the SAME automated checks. No trust bypass.
+# Auto-merges ONLY if all quality gates pass.
 
 name: Validate Submission
 
@@ -10,7 +10,7 @@ on:
       - 'submissions/**'
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -42,16 +42,65 @@ jobs:
             python -m discovery.normalize "$f" --inplace
           done
 
-      - name: Validate submissions
+      - name: Schema + structural validation
         if: steps.count.outputs.count > 0
         run: |
           python -m discovery.validate submissions/ --strict
-          echo "All submissions passed validation."
+          echo "All submissions passed schema validation."
 
-      - name: Check for duplicates
+      - name: Quality gate (grounding, honeypots, anomaly detection)
+        if: steps.count.outputs.count > 0
+        id: quality
+        run: |
+          python -c "
+          import json, sys
+          from pathlib import Path
+          from discovery.quality_gate import run_quality_gate_batch
+
+          # Load all submission results
+          results = []
+          for f in sorted(Path('submissions').glob('*.json')):
+              results.append(json.loads(f.read_text()))
+
+          # Run quality gate
+          report = run_quality_gate_batch(results)
+
+          print(f'Quality gate: {report[\"passed\"]}/{report[\"total\"]} passed')
+          print()
+
+          all_flags = []
+          all_blocks = []
+          for v in report['verdicts']:
+              pid = v['paper_id']
+              status = 'PASS' if v['pass'] else 'BLOCK'
+              print(f'  [{status}] {pid} (score={v[\"score\"]})')
+              for f in v['flags']:
+                  print(f'    FLAG: {f}')
+                  all_flags.append(f)
+              for b in v['blocks']:
+                  print(f'    BLOCK: {b}')
+                  all_blocks.append(b)
+
+          # Write summary for PR comment
+          summary = {
+              'total': report['total'],
+              'passed': report['passed'],
+              'failed': report['failed'],
+              'flags': all_flags,
+              'blocks': all_blocks,
+          }
+          Path('/tmp/quality_report.json').write_text(json.dumps(summary))
+
+          if report['failed'] > 0:
+              print(f'\nFAILED: {report[\"failed\"]} result(s) blocked by quality gate')
+              sys.exit(1)
+          else:
+              print(f'\nAll {report[\"total\"]} result(s) passed quality gate')
+          "
+
+      - name: Check for duplicates (local + global)
         if: steps.count.outputs.count > 0
         run: |
-          # Check if any paper_id already exists in the results dataset
           python -c "
           import json, sys
           from pathlib import Path
@@ -63,13 +112,29 @@ jobs:
               pid = data.get('_meta', {}).get('paper_id', f.stem)
               new_ids.add(pid)
 
-          # Check against existing (would query HF dataset in production)
-          # For now, just check for duplicates within the submission
-          if len(new_ids) < len(list(Path('submissions').glob('*.json'))):
-              print('WARNING: Duplicate paper_ids within submission')
+          # Check within submission
+          file_count = len(list(Path('submissions').glob('*.json')))
+          if len(new_ids) < file_count:
+              print(f'BLOCKED: Duplicate paper_ids within submission ({file_count} files, {len(new_ids)} unique)')
               sys.exit(1)
 
-          print(f'No duplicates found ({len(new_ids)} unique paper IDs)')
+          # Check against global tracking file
+          tracking = Path('processed_papers.jsonl')
+          if tracking.exists():
+              existing = set()
+              for line in tracking.read_text().strip().split('\n'):
+                  if line.strip():
+                      try:
+                          entry = json.loads(line)
+                          existing.add(entry.get('paper_id', ''))
+                      except json.JSONDecodeError:
+                          pass
+              dupes = new_ids & existing
+              if dupes:
+                  print(f'BLOCKED: {len(dupes)} paper(s) already processed: {dupes}')
+                  sys.exit(1)
+
+          print(f'No duplicates ({len(new_ids)} unique paper IDs)')
           "
 
       - name: Post validation summary
@@ -89,6 +154,7 @@ jobs:
             if (files.length === 0) {
               summary += `No JSON files found in submissions/.`;
             } else {
+              // Source breakdown
               const sources = {};
               for (const f of files) {
                 try {
@@ -96,12 +162,33 @@ jobs:
                   const src = data._meta?.source || 'unknown';
                   sources[src] = (sources[src] || 0) + 1;
                 } catch (e) {
-                  summary += `- ⚠️ ${f}: parse error\n`;
+                  summary += `- Warning: ${f}: parse error\n`;
                 }
               }
               summary += `| Source | Count |\n|--------|-------|\n`;
               for (const [src, cnt] of Object.entries(sources).sort()) {
                 summary += `| ${src} | ${cnt} |\n`;
+              }
+
+              // Quality gate report
+              try {
+                const report = JSON.parse(fs.readFileSync('/tmp/quality_report.json', 'utf8'));
+                summary += `\n### Quality Gate\n\n`;
+                summary += `- Passed: ${report.passed}/${report.total}\n`;
+                if (report.flags.length > 0) {
+                  summary += `- Flags: ${report.flags.length}\n`;
+                  for (const f of report.flags.slice(0, 10)) {
+                    summary += `  - ${f}\n`;
+                  }
+                }
+                if (report.blocks.length > 0) {
+                  summary += `- **Blocks: ${report.blocks.length}**\n`;
+                  for (const b of report.blocks) {
+                    summary += `  - ${b}\n`;
+                  }
+                }
+              } catch (e) {
+                // quality report not available
               }
             }
 
@@ -111,3 +198,21 @@ jobs:
               repo: context.repo.repo,
               body: summary
             });
+
+      - name: Auto-merge if all checks pass
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // All checks passed — auto-merge
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                merge_method: 'squash',
+              });
+              console.log('Auto-merged successfully');
+            } catch (e) {
+              console.log('Auto-merge failed (may need manual review):', e.message);
+            }
