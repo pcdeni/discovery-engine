@@ -26,7 +26,7 @@ def extract_paper(
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     prompt_text: Optional[str] = None,
-    max_retries: int = 2,
+    max_retries: int = 3,
 ) -> dict:
     """
     Extract structured data from a paper using an LLM.
@@ -105,7 +105,11 @@ def extract_paper(
             logger.warning(f"Attempt {attempt}/{max_retries}: {last_error}")
 
         if attempt < max_retries:
-            time.sleep(2 * attempt)  # backoff
+            # Longer backoff for rate limits (429), shorter for other errors
+            is_rate_limit = "429" in str(last_error) or "rate" in str(last_error).lower()
+            wait = (30 * attempt) if is_rate_limit else (3 * attempt)
+            logger.info(f"Waiting {wait}s before retry...")
+            time.sleep(wait)
 
     raise ExtractionError(f"Extraction failed after {max_retries} attempts. Last error: {last_error}")
 

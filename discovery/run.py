@@ -169,35 +169,49 @@ def run_loop(
                     papers_done += 1
                     continue
 
-                # Step 2: Extract with LLM
-                logger.info(f"  Extracting with LLM...")
-                t0 = time.time()
+                # Step 2: Extract with LLM (retry on validation failure)
+                max_attempts = 3
+                result = None
+                issues = None
 
-                result = extract_paper(
-                    paper.text,
-                    provider=provider,
-                    model=model,
-                )
+                for attempt in range(1, max_attempts + 1):
+                    logger.info(f"  Extracting with LLM...{f' (attempt {attempt})' if attempt > 1 else ''}")
+                    t0 = time.time()
 
-                elapsed = time.time() - t0
-                logger.info(f"  Extraction completed in {elapsed:.1f}s")
+                    result = extract_paper(
+                        paper.text,
+                        provider=provider,
+                        model=model,
+                    )
 
-                # Step 3: Normalize
-                result = normalize_result(result)
+                    elapsed = time.time() - t0
+                    logger.info(f"  Extraction completed in {elapsed:.1f}s")
 
-                # Add metadata
-                result["_meta"] = result.get("_meta", {})
-                result["_meta"]["paper_id"] = paper_id
-                result["_meta"]["source"] = paper.source
-                result["_meta"]["text_source"] = paper.text_source
-                result["_meta"]["extracted_by"] = config.get_github_user() or "anonymous"
-                result["_meta"]["extracted_at"] = datetime.now(timezone.utc).isoformat()
-                result["_meta"]["title"] = paper.title[:200]
+                    # Step 3: Normalize
+                    result = normalize_result(result)
 
-                # Step 4: Validate
-                issues = validate_result(result)
+                    # Add metadata
+                    result["_meta"] = result.get("_meta", {})
+                    result["_meta"]["paper_id"] = paper_id
+                    result["_meta"]["source"] = paper.source
+                    result["_meta"]["text_source"] = paper.text_source
+                    result["_meta"]["extracted_by"] = config.get_github_user() or "anonymous"
+                    result["_meta"]["extracted_at"] = datetime.now(timezone.utc).isoformat()
+                    result["_meta"]["title"] = paper.title[:200]
+
+                    # Step 4: Validate
+                    issues = validate_result(result)
+                    if not issues:
+                        break  # Success!
+
+                    if attempt < max_attempts:
+                        logger.warning(f"  Validation failed (attempt {attempt}), retrying...")
+                        for issue in issues[:3]:
+                            logger.warning(f"    - {issue}")
+                        time.sleep(2)
+
                 if issues:
-                    logger.warning(f"  Validation issues ({len(issues)}):")
+                    logger.warning(f"  Validation issues after {max_attempts} attempts ({len(issues)}):")
                     for issue in issues[:5]:
                         logger.warning(f"    - {issue}")
                     _log_progress(progress_file, paper_id, "fail", f"validation: {issues[0]}")
@@ -219,6 +233,9 @@ def run_loop(
                 batch_count += 1
 
                 logger.info(f"  Saved: {safe_filename} (batch: {batch_count}/{batch_size})")
+
+                # Brief pause between papers to respect API rate limits
+                time.sleep(5)
 
                 # Step 6: Auto-submit batch if full
                 if batch_count >= batch_size:
